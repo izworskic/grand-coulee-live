@@ -8,28 +8,6 @@ function replaceRequired(text, from, to, label) {
 const statusPath = 'lib/status.ts';
 let status = fs.readFileSync(statusPath, 'utf8');
 
-const oldDecision = `function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow' | 'astronomy'>) {
-  const precip = status.weather?.precipitationProbability ?? 0;
-  const spill = spillPhrase(status.flow.spillKcfs);
-  if (status.visitor.laserStatus === 'tonight') {
-    return {
-      headline: status.visitor.visitorCenterStatus === 'open' ? 'THIS IS A GOOD TIME TO COME' : 'COME BACK THIS EVENING',
-      detail: \`${'${precip <= 30 ? \'The weather looks cooperative\' : \'Keep an eye on the rain chance\'}'}. ${'${spill === \'active spill\' ? \'The spillway is active\' : spill === \'no meaningful spill reported\' ? \'No meaningful spill is reported\' : \'Current spill data is unavailable\'}'}. Sunset is ${'${status.astronomy.sunset}'}, and ${'${status.visitor.laserDetail.toLowerCase()}'} .\`.replace('} .','}.' )
-    };
-  }
-  if (status.visitor.visitorCenterStatus === 'open') {
-    return {
-      headline: 'COME ON OVER',
-      detail: \`The Visitor Center is open now. ${'${status.weather?.shortForecast ?? \'Current visitor conditions are available\'}'}${'${status.visitor.nextTour ? `, and ${status.visitor.nextTourDetail.toLowerCase()}` : \'.\'}'}\`
-    };
-  }
-  return {
-    headline: 'THE DAM IS STILL WORTH A LOOK',
-    detail: 'The Visitor Center is closed right now, but the public viewpoints are still the place to take in the scale of Grand Coulee. Use the live conditions here to decide how long you want to stay.'
-  };
-}`;
-
-// Build the exact current function separately to avoid nested-template escaping mistakes.
 const currentDecisionStart = status.indexOf("function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow' | 'astronomy'>)");
 const decisionEnd = status.indexOf('\n}\n\nexport async function getGrandCouleeStatus', currentDecisionStart);
 if (currentDecisionStart < 0 || decisionEnd < 0) throw new Error('Current decision function not found');
@@ -54,12 +32,16 @@ const newDecision = `function decision(status: Pick<GrandCouleeStatus, 'visitor'
   if (status.riverContext.inflowKcfs !== null && status.riverContext.dailyOutflowKcfs !== null) {
     const difference = status.riverContext.inflowKcfs - status.riverContext.dailyOutflowKcfs;
     if (Math.abs(difference) >= 1) {
-      liveParts.push(\`Daily inflow is running ${'${difference > 0 ? \'above\' : \'below\'}'} daily outflow (${ '${status.riverContext.inflowKcfs.toFixed(1)}' } vs ${ '${status.riverContext.dailyOutflowKcfs.toFixed(1)}' } kcfs)\`);
+      liveParts.push(\`Daily inflow is ${'${status.riverContext.inflowKcfs.toFixed(1)}'} kcfs versus ${'${status.riverContext.dailyOutflowKcfs.toFixed(1)}'} kcfs outflow\`);
     }
   }
 
-  const liveSentence = liveParts.length ? \`${'${liveParts.slice(0, 2).join(\'. \')}'} .\`.replace(' .','.') : '';
-  const weather = status.weather ? \` ${'${status.weather.temperatureF.toFixed(0)}'}°F and ${'${status.weather.shortForecast.toLowerCase()}'} right now.\` : '';
+  const liveSentence = liveParts.length ? \`${'${liveParts.join(\'. \')}'} .\`.replace(' .', '.') : '';
+  const weather = status.weather
+    ? status.weather.temperatureF === null
+      ? \` ${'${status.weather.shortForecast}'} right now.\`
+      : \` ${'${status.weather.temperatureF.toFixed(0)}'}°F and ${'${status.weather.shortForecast.toLowerCase()}'} right now.\`
+    : '';
 
   if (status.visitor.visitorCenterStatus === 'open') {
     return {
@@ -70,7 +52,7 @@ const newDecision = `function decision(status: Pick<GrandCouleeStatus, 'visitor'
 
   const centerDetail = status.visitor.visitorCenterDetail || 'Visitor Center is closed right now.';
   return {
-    headline: centerDetail.toLowerCase().includes('opens') ? 'START WITH THE VISITOR CENTER' : 'CHECK THE DAM BEFORE YOU GO',
+    headline: centerDetail.toLowerCase().includes('opens') ? 'VISITOR CENTER OPENS LATER' : 'CHECK THE DAM BEFORE YOU GO',
     detail: \`${'${centerDetail}'} ${'${liveSentence}'}${'${weather}'}\`.trim()
   };
 }`;

@@ -2,12 +2,14 @@ import { DateTime } from 'luxon';
 import { getVisitDaySchedule } from '@/lib/data/reclamation';
 import { ZONE } from '@/lib/data/usace';
 
+type AnyDateTime = DateTime<boolean>;
+
 export type VisitInterest = 'balanced' | 'tour' | 'family' | 'engineering' | 'history' | 'photos' | 'laser';
 export type VisitBudget = 45 | 90 | 180 | 240 | 'laser';
 export type MobilityPreference = 'standard' | 'minimize-walking';
 
 export interface VisitPlanInput {
-  arrival: DateTime;
+  arrival: AnyDateTime;
   budget: VisitBudget;
   interest: VisitInterest;
   mobility: MobilityPreference;
@@ -35,20 +37,20 @@ export interface VisitPlan {
   alerts: string[];
 }
 
-const mins = (a: DateTime, b: DateTime) => Math.max(0, Math.round(b.diff(a, 'minutes').minutes));
-const maxDt = (a: DateTime, b: DateTime) => a > b ? a : b;
-const minDt = (a: DateTime, b: DateTime) => a < b ? a : b;
+const mins = (a: AnyDateTime, b: AnyDateTime) => Math.max(0, Math.round(b.diff(a, 'minutes').minutes));
+const maxDt = (a: AnyDateTime, b: AnyDateTime) => a > b ? a : b;
+const minDt = (a: AnyDateTime, b: AnyDateTime) => a < b ? a : b;
 
-function iso(dt: DateTime) {
+function iso(dt: AnyDateTime) {
   return dt.toISO() ?? '';
 }
 
-function addStep(steps: VisitPlanStep[], start: DateTime, end: DateTime, title: string, detail: string, kind: VisitPlanStep['kind']) {
+function addStep(steps: VisitPlanStep[], start: AnyDateTime, end: AnyDateTime, title: string, detail: string, kind: VisitPlanStep['kind']) {
   if (end <= start || mins(start, end) < 8) return;
   steps.push({ start: iso(start), end: iso(end), title, detail, kind });
 }
 
-function pressure(arrival: DateTime, hasTours: boolean, hasLaser: boolean) {
+function pressure(arrival: AnyDateTime, hasTours: boolean, hasLaser: boolean) {
   let score = 0;
   const reasons: string[] = [];
   if ([6, 7].includes(arrival.weekday)) { score += 2; reasons.push('weekend'); }
@@ -109,7 +111,7 @@ export function buildVisitPlan(input: VisitPlanInput): VisitPlan {
   const steps: VisitPlanStep[] = [];
 
   const tourPriority = ['tour', 'engineering', 'family'].includes(input.interest);
-  let selectedTour = (tourPriority ? realisticallyReachable : realisticallyReachable.filter(dep => dep.diff(arrival, 'minutes').minutes >= 35))[0] ?? null;
+  let selectedTour: AnyDateTime | null = (tourPriority ? realisticallyReachable : realisticallyReachable.filter(dep => dep.diff(arrival, 'minutes').minutes >= 35))[0] ?? null;
   if (input.budget === 45) selectedTour = null;
 
   if (input.interest === 'tour' && !departures.length) alerts.push('No public tours are scheduled for this day under the verified 2026 schedule.');
@@ -125,11 +127,11 @@ export function buildVisitPlan(input: VisitPlanInput): VisitPlan {
   const orientationMinutes = input.mobility === 'minimize-walking' ? 20 : 15;
   const viewMinutes = input.mobility === 'minimize-walking' ? 25 : input.interest === 'photos' ? 40 : 30;
   const centerDesired = input.interest === 'history' ? 60 : input.interest === 'family' ? 45 : 40;
-  let cursor = arrival;
+  let cursor: AnyDateTime = arrival;
   let centerDone = false;
   let viewDone = false;
 
-  const addOrientation = (limit: DateTime) => {
+  const addOrientation = (limit: AnyDateTime) => {
     const end = minDt(limit, cursor.plus({ minutes: orientationMinutes }));
     addStep(steps, cursor, end, titleForInterest(input.interest), input.interest === 'engineering'
       ? 'Use Grand Coulee Live to identify the spillway, powerhouse blocks, Lake Roosevelt level, current outflow and the operating data that are actually available today.'
@@ -137,7 +139,7 @@ export function buildVisitPlan(input: VisitPlanInput): VisitPlan {
     cursor = end;
   };
 
-  const addCenter = (limit: DateTime) => {
+  const addCenter = (limit: AnyDateTime) => {
     if (!centerOpen || !centerClose || centerDone) return;
     const start = maxDt(cursor, centerOpen);
     const availableEnd = minDt(limit, centerClose);
@@ -152,7 +154,7 @@ export function buildVisitPlan(input: VisitPlanInput): VisitPlan {
     centerDone = true;
   };
 
-  const addView = (limit: DateTime) => {
+  const addView = (limit: AnyDateTime) => {
     if (viewDone) return;
     const end = minDt(limit, cursor.plus({ minutes: viewMinutes }));
     addStep(steps, cursor, end, input.interest === 'photos' ? 'Photograph from public viewing areas' : 'Exterior dam view', input.interest === 'photos'

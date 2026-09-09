@@ -5,6 +5,7 @@ import { CurrentConditions } from '@/components/CurrentConditions';
 import { EngineeringFacts } from '@/components/EngineeringFacts';
 import { PhotographicDamExplorer } from '@/components/PhotographicDamExplorer';
 import { OperationsHistory } from '@/components/OperationsHistory';
+import { VisitPlanner } from '@/components/VisitPlanner';
 import type { GrandCouleeStatus } from '@/lib/types';
 
 type Props = { initialStatus: GrandCouleeStatus };
@@ -194,6 +195,8 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
         <Metric label="Sunset" value={status.astronomy.sunset} sub={`Civil dusk ${status.astronomy.civilDusk}`} tag="CALCULATED" />
       </section>
     </header>
+
+    <VisitPlanner status={status} />
 
     <PhotographicDamExplorer status={status} />
 

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [{ url: 'https://grandcoulee.chrisizworski.com/', changeFrequency: 'hourly', priority: 1 }];
+  return [{ url: 'https://chrisizworski.com/national-tools/grand-coulee/', changeFrequency: 'hourly', priority: 1 }];
 }

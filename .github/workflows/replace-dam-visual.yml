@@ -1,0 +1,55 @@
+name: Replace dam visual
+
+on:
+  push:
+    paths:
+      - '.github/workflows/replace-dam-visual.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Wire photographic explorer
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('components/GrandCouleeDashboard.tsx')
+          s = p.read_text()
+          old_import = "import { EngineeringFacts } from '@/components/EngineeringFacts';\nimport { OperationsHistory } from '@/components/OperationsHistory';"
+          new_import = "import { EngineeringFacts } from '@/components/EngineeringFacts';\nimport { PhotographicDamExplorer } from '@/components/PhotographicDamExplorer';\nimport { OperationsHistory } from '@/components/OperationsHistory';"
+          if "PhotographicDamExplorer" not in s:
+              if old_import not in s:
+                  raise SystemExit('Expected import anchor not found')
+              s = s.replace(old_import, new_import, 1)
+          old_call = '    <DamModel status={status} />'
+          new_call = '    <PhotographicDamExplorer status={status} />'
+          if new_call not in s:
+              if old_call not in s:
+                  raise SystemExit('Expected DamModel call not found')
+              s = s.replace(old_call, new_call, 1)
+          p.write_text(s)
+          PY
+      - name: Install
+        run: npm install
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Commit replacement and remove one-off workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/replace-dam-visual.yml
+          git add components/GrandCouleeDashboard.tsx
+          git commit -m 'Use real Grand Coulee photo for interactive dam explorer'
+          git push origin HEAD:main

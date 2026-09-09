@@ -4,9 +4,13 @@ import { useEffect, useState } from 'react';
 import { PhotographicDamExplorer } from '@/components/PhotographicDamExplorer';
 import { OperationsHistory } from '@/components/OperationsHistory';
 import { VisitPlanner } from '@/components/VisitPlanner';
+import { buildReturnVisitSummary, type ReturnVisitSnapshot, type ReturnVisitSummary } from '@/lib/return-visit';
 import type { GrandCouleeStatus } from '@/lib/types';
 
 type Props = { initialStatus: GrandCouleeStatus };
+
+const RETURN_VISIT_KEY = 'grand-coulee-live:last-check:v1';
+const MAX_RETURN_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 function n(value: number | null, digits = 1) {
   return value === null || !Number.isFinite(value) ? '—' : value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -35,6 +39,21 @@ function shortDate(date: string | null) {
   return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }).format(parsed);
 }
 
+function snapshot(status: GrandCouleeStatus, savedAt = Date.now()): ReturnVisitSnapshot {
+  return {
+    savedAt,
+    observedAt: status.observedAt,
+    lakeFt: status.reservoir.forebayFt,
+    outflowKcfs: status.flow.totalOutflowKcfs
+  };
+}
+
+function returnAgeLabel(hours: number) {
+  if (hours < 24) return `${Math.max(2, Math.round(hours))}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
 function Metric({ label, value, sub, tag }: { label: string; value: string; sub: string; tag?: string }) {
   return <article className="metric-card">
     <div className="metric-top"><span>{label}</span>{tag && <span className="metric-tag">{tag}</span>}</div>
@@ -45,12 +64,42 @@ function Metric({ label, value, sub, tag }: { label: string; value: string; sub:
 
 export function GrandCouleeDashboard({ initialStatus }: Props) {
   const [status, setStatus] = useState(initialStatus);
+  const [returnVisit, setReturnVisit] = useState<ReturnVisitSummary | null>(null);
 
   useEffect(() => {
     const refresh = () => fetch('/api/status').then(r => r.ok ? r.json() : null).then(data => data?.reservoir && setStatus(data)).catch(() => undefined);
     const timer = window.setInterval(refresh, 10 * 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    const current = snapshot(initialStatus, now);
+    try {
+      const raw = window.localStorage.getItem(RETURN_VISIT_KEY);
+      if (!raw) {
+        window.localStorage.setItem(RETURN_VISIT_KEY, JSON.stringify(current));
+        return;
+      }
+
+      const previous = JSON.parse(raw) as ReturnVisitSnapshot;
+      if (!Number.isFinite(previous?.savedAt)) {
+        window.localStorage.setItem(RETURN_VISIT_KEY, JSON.stringify(current));
+        return;
+      }
+
+      const ageMs = now - previous.savedAt;
+      const summary = buildReturnVisitSummary(previous, current, now);
+      if (summary) {
+        setReturnVisit(summary);
+        window.localStorage.setItem(RETURN_VISIT_KEY, JSON.stringify(current));
+      } else if (ageMs > MAX_RETURN_AGE_MS) {
+        window.localStorage.setItem(RETURN_VISIT_KEY, JSON.stringify(current));
+      }
+    } catch {
+      try { window.localStorage.setItem(RETURN_VISIT_KEY, JSON.stringify(current)); } catch {}
+    }
+  }, [initialStatus]);
 
   const updated = status.observedAt ? datePacific(status.observedAt) : 'Operational feed unavailable';
   const holidayClosure = status.visitor.visitorCenterDetail.toLowerCase().includes('federal holiday');
@@ -83,7 +132,7 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
       <nav className="topbar"><a href="https://chrisizworski.com" className="brand">CHRISIZWORSKI.COM</a><span>National Tools · Pacific Northwest</span></nav>
       <div className="hero-inner">
         <div className="hero-copy"><span className="eyebrow">LIVE INFRASTRUCTURE · GRAND COULEE, WASHINGTON</span><h1>GRAND COULEE <em>LIVE</em></h1><p className="lead">Grand Coulee, right now.</p><p className="support">Lake Roosevelt, river flow, what’s changing now and over the last week, tours and visitor conditions.</p><div className={`freshness ${telemetryFreshnessClass}`}><span className="pulse"/>{telemetryLabel}</div></div>
-        <div className="decision-card"><span className="eyebrow">TODAY</span><h2>{status.decision.headline}</h2><p>{status.decision.detail}</p></div>
+        <div className="decision-card"><span className="eyebrow">TODAY</span><h2>{status.decision.headline}</h2><p>{status.decision.detail}</p>{returnVisit && <div className="return-visit"><span>SINCE YOUR LAST CHECK · {returnAgeLabel(returnVisit.ageHours)}</span><strong>{returnVisit.headline}</strong>{returnVisit.items.map(item => <p key={item}>{item}</p>)}</div>}</div>
       </div>
 
       <section className="metric-grid" aria-label="Current Grand Coulee conditions">

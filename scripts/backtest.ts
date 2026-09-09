@@ -2,9 +2,36 @@ import { parseDailyHtml } from '../lib/data/usace';
 import { inferredEfficiency, theoreticalHydraulicMW } from '../lib/generation';
 import type { DailyObservation } from '../lib/types';
 
-function median(values: number[]) { const s = [...values].sort((a,b)=>a-b); const m = Math.floor(s.length/2); return s.length % 2 ? s[m] : (s[m-1]+s[m])/2; }
-function mae(errors: number[]) { return errors.reduce((s,v)=>s+Math.abs(v),0)/errors.length; }
-function mape(actual: number[], estimated: number[]) { return actual.reduce((s,v,i)=>s+Math.abs((v-estimated[i])/v),0)/actual.length*100; }
+function median(values: number[]) {
+  const s = [...values].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function percentile(values: number[], p: number) {
+  const s = [...values].sort((a, b) => a - b);
+  if (!s.length) return NaN;
+  const i = (s.length - 1) * p;
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  if (lo === hi) return s[lo];
+  return s[lo] + (s[hi] - s[lo]) * (i - lo);
+}
+
+function metrics(actual: number[], estimated: number[]) {
+  if (!actual.length) return null;
+  const errors = estimated.map((v, i) => v - actual[i]);
+  const abs = errors.map(Math.abs);
+  const mae = abs.reduce((s, v) => s + v, 0) / abs.length;
+  const mape = actual.reduce((s, v, i) => s + Math.abs((v - estimated[i]) / v), 0) / actual.length * 100;
+  const bias = errors.reduce((s, v) => s + v, 0) / errors.length;
+  return {
+    n: actual.length,
+    MAE_MW: Number(mae.toFixed(1)),
+    MAPE_pct: Number(mape.toFixed(2)),
+    bias_MW: Number(bias.toFixed(1)),
+    medianAbsError_MW: Number(median(abs).toFixed(1))
+  };
+}
 
 async function fetchMonth(ago: number) {
   const url = `https://public.crohms.org/dd/nwdp/project_daily/webexec/rep?ago=${ago}&r=gcl`;
@@ -18,27 +45,94 @@ function estimate(day: DailyObservation, efficiency: number) {
   return theoreticalHydraulicMW(day.generationFlowKcfs, day.headFt) * efficiency;
 }
 
+type Evaluation = {
+  date: string;
+  actual: number;
+  estimated: number;
+  flow: number;
+  head: number;
+  forebay: number | null;
+};
+
 async function main() {
-  const months = (await Promise.allSettled([5,4,3,2,1,0].map(fetchMonth))).flatMap(result => result.status === 'fulfilled' ? result.value : []);
-  const rows = [...new Map(months.map(row => [row.date,row])).values()].sort((a,b)=>a.date.localeCompare(b.date));
-  const valid = rows.filter(row => row.averageGenerationMW && row.generationFlowKcfs && row.headFt && inferredEfficiency(row));
-  const candidates = { fixed90: [] as number[], median7: [] as number[], median14: [] as number[] };
-  const actual: number[] = [];
-  for (let i=14;i<valid.length;i++) {
+  const monthOffsets = Array.from({ length: 13 }, (_, i) => 12 - i);
+  const settled = await Promise.allSettled(monthOffsets.map(fetchMonth));
+  const months = settled.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+  const failedMonths = settled.filter(result => result.status === 'rejected').length;
+  const rows = [...new Map(months.map(row => [row.date, row])).values()].sort((a, b) => a.date.localeCompare(b.date));
+  const valid = rows.filter(row =>
+    row.averageGenerationMW !== null && row.averageGenerationMW > 0 &&
+    row.generationFlowKcfs !== null && row.generationFlowKcfs > 0 &&
+    row.headFt !== null && row.headFt > 0 &&
+    inferredEfficiency(row) !== null
+  );
+
+  const evaluation: Evaluation[] = [];
+  for (let i = 14; i < valid.length; i++) {
     const target = valid[i];
-    const efficiencies = valid.slice(0,i).map(inferredEfficiency).filter((v):v is number => v !== null);
-    const e7 = median(efficiencies.slice(-7));
-    const e14 = median(efficiencies.slice(-14));
-    const a = target.averageGenerationMW!;
-    const p0 = estimate(target,.90), p7 = estimate(target,e7), p14 = estimate(target,e14);
-    if ([p0,p7,p14].some(v=>v===null)) continue;
-    actual.push(a); candidates.fixed90.push(p0!); candidates.median7.push(p7!); candidates.median14.push(p14!);
+    const historicalEfficiencies = valid
+      .slice(0, i)
+      .map(inferredEfficiency)
+      .filter((value): value is number => value !== null);
+    const rolling = median(historicalEfficiencies.slice(-14));
+    const predicted = estimate(target, rolling);
+    if (predicted === null) continue;
+    evaluation.push({
+      date: target.date,
+      actual: target.averageGenerationMW!,
+      estimated: predicted,
+      flow: target.generationFlowKcfs!,
+      head: target.headFt!,
+      forebay: target.forebayFt
+    });
   }
-  if (!actual.length) throw new Error('Not enough complete USACE daily generation rows to backtest.');
-  for (const [name, estimates] of Object.entries(candidates)) {
-    const errors = estimates.map((v,i)=>v-actual[i]);
-    console.log(name, { n: actual.length, MAE_MW: mae(errors).toFixed(1), MAPE_pct: mape(actual,estimates).toFixed(2), bias_MW: (errors.reduce((s,v)=>s+v,0)/errors.length).toFixed(1), medianAbsError_MW: median(errors.map(Math.abs)).toFixed(1) });
+
+  if (!evaluation.length) throw new Error('Not enough complete USACE daily generation rows to backtest.');
+
+  const allActual = evaluation.map(row => row.actual);
+  const allEstimated = evaluation.map(row => row.estimated);
+  const flows = evaluation.map(row => row.flow);
+  const q33 = percentile(flows, 1 / 3);
+  const q67 = percentile(flows, 2 / 3);
+
+  const regimes = {
+    lowFlow: evaluation.filter(row => row.flow <= q33),
+    mediumFlow: evaluation.filter(row => row.flow > q33 && row.flow <= q67),
+    highFlow: evaluation.filter(row => row.flow > q67)
+  };
+
+  const result = {
+    sourceMonthsRequested: monthOffsets.length,
+    sourceMonthsFailed: failedMonths,
+    sourceRows: rows.length,
+    completeRows: valid.length,
+    evaluationWindow: {
+      first: evaluation[0].date,
+      last: evaluation[evaluation.length - 1].date
+    },
+    ranges: {
+      generationFlowKcfs: [Number(Math.min(...flows).toFixed(1)), Number(Math.max(...flows).toFixed(1))],
+      headFt: [Number(Math.min(...evaluation.map(row => row.head)).toFixed(1)), Number(Math.max(...evaluation.map(row => row.head)).toFixed(1))],
+      forebayFt: [
+        Number(Math.min(...evaluation.map(row => row.forebay).filter((v): v is number => v !== null)).toFixed(1)),
+        Number(Math.max(...evaluation.map(row => row.forebay).filter((v): v is number => v !== null)).toFixed(1))
+      ]
+    },
+    overall: metrics(allActual, allEstimated),
+    flowRegimes: Object.fromEntries(Object.entries(regimes).map(([name, subset]) => [name, {
+      flowRangeKcfs: subset.length ? [Number(Math.min(...subset.map(row => row.flow)).toFixed(1)), Number(Math.max(...subset.map(row => row.flow)).toFixed(1))] : null,
+      metrics: metrics(subset.map(row => row.actual), subset.map(row => row.estimated))
+    }]))
+  };
+
+  console.log(JSON.stringify(result, null, 2));
+
+  if ((result.overall?.MAPE_pct ?? Infinity) > 8) {
+    throw new Error(`Overall generation MAPE ${result.overall?.MAPE_pct}% exceeds the 8% target.`);
   }
 }
 
-main().catch(error => { console.error(error); process.exit(1); });
+main().catch(error => {
+  console.error(error);
+  process.exit(1);
+});

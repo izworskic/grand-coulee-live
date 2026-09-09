@@ -1,5 +1,6 @@
 import { parseDailyHtml } from '../lib/data/usace';
 import { inferredEfficiency, theoreticalHydraulicMW } from '../lib/generation';
+import { estimateHeadFromRatingCurve, estimateTailwaterFromOutflow } from '../lib/hydraulics';
 import type { DailyObservation } from '../lib/types';
 
 function median(values: number[]) {
@@ -30,6 +31,22 @@ function metrics(actual: number[], estimated: number[]) {
     MAPE_pct: Number(mape.toFixed(2)),
     bias_MW: Number(bias.toFixed(1)),
     medianAbsError_MW: Number(median(abs).toFixed(1))
+  };
+}
+
+function hydraulicMetrics(actual: number[], estimated: number[]) {
+  if (!actual.length) return null;
+  const errors = estimated.map((v, i) => v - actual[i]);
+  const abs = errors.map(Math.abs);
+  const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+  return {
+    n: actual.length,
+    MAE_ft: Number(mean(abs).toFixed(2)),
+    bias_ft: Number(mean(errors).toFixed(2)),
+    medianAbsError_ft: Number(median(abs).toFixed(2)),
+    p90AbsError_ft: Number(percentile(abs, 0.9).toFixed(2)),
+    p95AbsError_ft: Number(percentile(abs, 0.95).toFixed(2)),
+    maxAbsError_ft: Number(Math.max(...abs).toFixed(2))
   };
 }
 
@@ -101,6 +118,20 @@ async function main() {
     highFlow: evaluation.filter(row => row.flow > q67)
   };
 
+  const hydraulicRows = rows.flatMap(row => {
+    if (row.totalOutflowKcfs === null || row.tailwaterFt === null || row.forebayFt === null || row.headFt === null) return [];
+    const estimatedTailwater = estimateTailwaterFromOutflow(row.totalOutflowKcfs);
+    const estimatedHead = estimateHeadFromRatingCurve(row.forebayFt, row.totalOutflowKcfs);
+    if (estimatedTailwater === null || estimatedHead === null) return [];
+    return [{
+      outflow: row.totalOutflowKcfs,
+      actualTailwater: row.tailwaterFt,
+      estimatedTailwater,
+      actualHead: row.headFt,
+      estimatedHead
+    }];
+  });
+
   const result = {
     sourceMonthsRequested: monthOffsets.length,
     sourceMonthsFailed: failedMonths,
@@ -122,7 +153,15 @@ async function main() {
     flowRegimes: Object.fromEntries(Object.entries(regimes).map(([name, subset]) => [name, {
       flowRangeKcfs: subset.length ? [Number(Math.min(...subset.map(row => row.flow)).toFixed(1)), Number(Math.max(...subset.map(row => row.flow)).toFixed(1))] : null,
       metrics: metrics(subset.map(row => row.actual), subset.map(row => row.estimated))
-    }]))
+    }])),
+    tailwaterRatingCurveValidation: hydraulicRows.length ? {
+      outflowRangeKcfs: [
+        Number(Math.min(...hydraulicRows.map(row => row.outflow)).toFixed(1)),
+        Number(Math.max(...hydraulicRows.map(row => row.outflow)).toFixed(1))
+      ],
+      tailwater: hydraulicMetrics(hydraulicRows.map(row => row.actualTailwater), hydraulicRows.map(row => row.estimatedTailwater)),
+      head: hydraulicMetrics(hydraulicRows.map(row => row.actualHead), hydraulicRows.map(row => row.estimatedHead))
+    } : null
   };
 
   console.log(JSON.stringify(result, null, 2));

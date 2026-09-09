@@ -6,6 +6,7 @@ import './current-conditions.css';
 import './interpretive-depth.css';
 import './photographic-dam.css';
 import './river-context.css';
+import './visit-planner.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://chrisizworski.com'),

@@ -3,7 +3,7 @@ import { getGrandCouleeStatus } from '@/lib/status';
 
 export const revalidate = 600;
 
-const SITE_URL = 'https://grandcoulee.chrisizworski.com/';
+const SITE_URL = 'https://chrisizworski.com/national-tools/grand-coulee/';
 
 export default async function HomePage() {
   const status = await getGrandCouleeStatus();

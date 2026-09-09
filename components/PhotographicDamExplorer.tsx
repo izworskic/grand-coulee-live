@@ -117,7 +117,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
         <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
         <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
         <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
-        <div><span>Spill</span><strong>{status.riverContext.dailySpillKcfs === null ? '—' : `${n(status.riverContext.dailySpillKcfs, 2)} kcfs`}</strong><small>{status.riverContext.dailySpillDate ? `${shortDate(status.riverContext.dailySpillDate)} daily avg${status.riverContext.dailySpillPercent === null ? '' : ` · ${n(status.riverContext.dailySpillPercent, 1)}%`}` : '—'}</small></div>
+        <div><span>Lake change</span><strong>{status.reservoir.change24hFt === null ? '—' : `${status.reservoir.change24hFt > 0 ? '↑' : status.reservoir.change24hFt < 0 ? '↓' : '→'} ${Math.abs(status.reservoir.change24hFt).toFixed(2)} ft`}</strong><small>past 24 hours</small></div>
       </div>}
 
       <div className="photo-dam-key" aria-label="Dam structure key">

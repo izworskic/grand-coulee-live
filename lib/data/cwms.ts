@@ -27,7 +27,9 @@ type CwmsSeriesResponse = {
   values?: CwmsTuple[];
 };
 
-export function parseCwmsSeries(payload: unknown): Array<{ timestamp: number; value: number | null }> {
+type SeriesRows = Array<{ timestamp: number; value: number | null }>;
+
+export function parseCwmsSeries(payload: unknown): SeriesRows {
   if (!payload || typeof payload !== 'object') return [];
   const values = (payload as CwmsSeriesResponse).values;
   if (!Array.isArray(values)) return [];
@@ -41,7 +43,7 @@ export function parseCwmsSeries(payload: unknown): Array<{ timestamp: number; va
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-async function fetchSeries(name: string, unit: 'cfs' | 'ft', lookbackHours = 72) {
+async function fetchSeries(name: string, unit: 'cfs' | 'ft', lookbackHours = 72): Promise<SeriesRows> {
   const end = new Date();
   const begin = new Date(end.getTime() - lookbackHours * 3_600_000);
   const params = new URLSearchParams({
@@ -60,24 +62,27 @@ async function fetchSeries(name: string, unit: 'cfs' | 'ft', lookbackHours = 72)
     signal: AbortSignal.timeout(9000)
   });
 
-  if (!response.ok) {
-    throw new Error(`CWMS ${name} request failed: ${response.status}`);
-  }
-
-  const payload = await response.json() as CwmsSeriesResponse;
-  return parseCwmsSeries(payload);
+  if (!response.ok) throw new Error(`CWMS ${name} request failed: ${response.status}`);
+  return parseCwmsSeries(await response.json() as CwmsSeriesResponse);
 }
 
-function valuesByTime(rows: Array<{ timestamp: number; value: number | null }>) {
+function rowsOrEmpty(result: PromiseSettledResult<SeriesRows>): SeriesRows {
+  return result.status === 'fulfilled' ? result.value : [];
+}
+
+function valuesByTime(rows: SeriesRows) {
   return new Map(rows.map(row => [row.timestamp, row.value]));
 }
 
-function latestTimestamp(rows: Array<{ timestamp: number; value: number | null }>) {
-  return rows.length ? rows[rows.length - 1].timestamp : 0;
+function latestNumericTimestamp(rows: SeriesRows) {
+  const numeric = rows.filter(row => row.value !== null);
+  return numeric.length ? numeric[numeric.length - 1].timestamp : 0;
 }
 
 export async function getCwmsHourlyObservations(): Promise<HourlyObservation[]> {
-  const [outflowRows, generationRows, spillRows, forebayRows, tailwaterRows] = await Promise.all([
+  // Treat every operational series independently. CWMS frequently publishes some GCL
+  // series while other catalogued series are temporarily null or unavailable.
+  const settled = await Promise.allSettled([
     fetchSeries(GCL_CWMS_SERIES.totalOutflow, 'cfs'),
     fetchSeries(GCL_CWMS_SERIES.generationFlow, 'cfs'),
     fetchSeries(GCL_CWMS_SERIES.spill, 'cfs'),
@@ -85,9 +90,10 @@ export async function getCwmsHourlyObservations(): Promise<HourlyObservation[]> 
     fetchSeries(GCL_CWMS_SERIES.tailwater, 'ft')
   ]);
 
+  const [outflowRows, generationRows, spillRows, forebayRows, tailwaterRows] = settled.map(rowsOrEmpty);
   const allSeries = [outflowRows, generationRows, spillRows, forebayRows, tailwaterRows];
-  if (!allSeries.some(rows => rows.length)) {
-    throw new Error('CWMS returned no Grand Coulee hourly observations.');
+  if (!allSeries.some(rows => rows.some(row => row.value !== null))) {
+    throw new Error('CWMS returned no numeric Grand Coulee hourly observations.');
   }
 
   const maps = allSeries.map(valuesByTime);
@@ -99,7 +105,6 @@ export async function getCwmsHourlyObservations(): Promise<HourlyObservation[]> 
     const tailwaterFt = tailwater.get(timestamp) ?? null;
     const local = DateTime.fromMillis(timestamp, { zone: 'utc' }).setZone(ZONE);
     const hour = local.hour === 0 ? 24 : local.hour;
-
     const cfsToKcfs = (value: number | null | undefined) => value === null || value === undefined ? null : value / 1000;
 
     return {
@@ -114,11 +119,8 @@ export async function getCwmsHourlyObservations(): Promise<HourlyObservation[]> 
     } satisfies HourlyObservation;
   }).filter(row => [row.totalOutflowKcfs, row.generationFlowKcfs, row.spillKcfs, row.forebayFt, row.tailwaterFt].some(value => value !== null));
 
-  if (!observations.length) {
-    throw new Error('CWMS returned only null Grand Coulee observations.');
-  }
+  if (!observations.length) throw new Error('CWMS returned only null Grand Coulee observations.');
 
-  // Protect against a partially lagging series producing a misleading latest composite row.
-  const freshestSeriesTime = Math.max(...allSeries.map(latestTimestamp));
-  return observations.filter(row => Date.parse(row.observedAt) <= freshestSeriesTime);
+  const freshestNumericTime = Math.max(...allSeries.map(latestNumericTimestamp));
+  return observations.filter(row => Date.parse(row.observedAt) <= freshestNumericTime);
 }

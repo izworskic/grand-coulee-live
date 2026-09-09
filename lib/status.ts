@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { getAstronomy } from '@/lib/data/astronomy';
+import { getLakeLevelForecast, LAKE_LEVEL_URL } from '@/lib/data/lakeLevel';
 import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOURLY_URL, ZONE } from '@/lib/data/usace';
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
 import { getWeather } from '@/lib/data/weather';
@@ -25,6 +26,16 @@ function dailyFreshness(date: string | null, now: DateTime): Freshness {
   const ageDays = now.diff(observed, 'days').days;
   if (ageDays <= 2) return 'current';
   if (ageDays <= 7) return 'delayed';
+  return 'stale';
+}
+
+function forecastFreshness(finalDate: string | null, now: DateTime): Freshness {
+  if (!finalDate) return 'unavailable';
+  const final = DateTime.fromISO(finalDate, { zone: ZONE }).endOf('day');
+  if (!final.isValid) return 'unavailable';
+  if (final >= now) return 'current';
+  const ageDays = now.diff(final, 'days').days;
+  if (ageDays <= 2) return 'delayed';
   return 'stale';
 }
 
@@ -94,17 +105,19 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
 export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const retrievedAt = new Date().toISOString();
   const now = DateTime.now().setZone(ZONE);
-  const [hourlyResult, dailyResult, weatherResult, sourceHealthResult] = await Promise.allSettled([
+  const [hourlyResult, dailyResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
     getHourlyObservations(),
     getDailyObservations(),
     getWeather(),
-    verifyReclamationSources()
+    verifyReclamationSources(),
+    getLakeLevelForecast()
   ]);
 
   const hourly = hourlyResult.status === 'fulfilled' ? hourlyResult.value : [];
   const daily = dailyResult.status === 'fulfilled' ? dailyResult.value : [];
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const reclamationHealthy = sourceHealthResult.status === 'fulfilled' ? sourceHealthResult.value : false;
+  const rawLakeForecast = lakeForecastResult.status === 'fulfilled' ? lakeForecastResult.value : null;
   const latest = hourly.length ? hourly[hourly.length - 1] : null;
   const telemetry = telemetryStatus(latest);
   const latestDaily = daily.filter(row => Object.values(row).some(v => typeof v === 'number')).at(-1) ?? null;
@@ -125,12 +138,21 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const currentFreshness = freshness(observedAt);
   const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
   const calibrationFreshness = dailyFreshness(calibration.latestDate, now);
+  const lakeForecastFreshness = forecastFreshness(rawLakeForecast?.finalForecast?.date ?? null, now);
   const astronomy = getAstronomy(now);
   const visitor = getVisitorStatus(now, reclamationHealthy);
   const pumpingUsable = dailySourceFreshness === 'current' || dailySourceFreshness === 'delayed';
   const headSource: GrandCouleeStatus['hydraulic']['headSource'] = latest?.headFt !== null && latest?.headFt !== undefined
     ? 'measured'
     : estimatedHeadFt !== null ? 'rating-curve' : 'unavailable';
+  const lakeForecast: GrandCouleeStatus['lakeForecast'] = rawLakeForecast ? {
+    sourceObservedDate: rawLakeForecast.sourceObservedDate,
+    sourceObservedElevationFt: rawLakeForecast.sourceObservedElevationFt,
+    nextDate: rawLakeForecast.nextForecast?.date ?? null,
+    nextElevationFt: rawLakeForecast.nextForecast?.elevationFt ?? null,
+    finalDate: rawLakeForecast.finalForecast?.date ?? null,
+    finalElevationFt: rawLakeForecast.finalForecast?.elevationFt ?? null
+  } : null;
 
   const sources: SourceProvenance[] = [
     {
@@ -154,6 +176,16 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       retrievedAt,
       freshness: estimatedHeadFt !== null ? currentFreshness : 'unavailable',
       note: 'Used only when measured tailwater is unavailable. Tailwater is linearly interpolated from Plate 7-5 using current total outflow. Validation against 367 historical daily observations produced 0.31 ft MAE and 0.85 ft 95th-percentile absolute error; USACE still cautions that Rufus Woods Lake backwater affects actual tailwater.'
+    },
+    {
+      id: 'reclamation-lake-forecast',
+      label: 'Bureau of Reclamation · Lake Roosevelt forecast',
+      url: LAKE_LEVEL_URL,
+      kind: 'reported',
+      observedAt: rawLakeForecast?.sourceObservedDate ?? null,
+      retrievedAt,
+      freshness: lakeForecastFreshness,
+      note: 'Official provisional/predicted midnight reservoir elevations. Forecast values are kept separate from the measured CWMS forebay observation and are never used as measured input.'
     },
     {
       id: 'usace-daily',
@@ -214,6 +246,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       change24hFt: delta(hourly, latest, 24),
       belowFullPoolFt: latest?.forebayFt === null || latest?.forebayFt === undefined ? null : FULL_POOL_FT - latest.forebayFt
     },
+    lakeForecast,
     flow: {
       totalOutflowKcfs: latest?.totalOutflowKcfs ?? null,
       generationFlowKcfs: latest?.generationFlowKcfs ?? null,

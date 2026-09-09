@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  return { rules: { userAgent: '*', allow: '/' }, sitemap: 'https://grandcoulee.chrisizworski.com/sitemap.xml' };
+  return { rules: { userAgent: '*', allow: '/' }, sitemap: 'https://chrisizworski.com/national-tools/grand-coulee/sitemap.xml' };
 }

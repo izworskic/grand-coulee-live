@@ -1,8 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDailyObservations, getHourlyObservations } from '@/lib/data/usace';
-import { buildCalibration, estimateGenerationMW } from '@/lib/generation';
+import { buildCalibration } from '@/lib/generation';
+import { deriveDailyInsights, deriveHourlyInsights, enrichHourlyHistory } from '@/lib/history';
 
 export const revalidate = 900;
+
+function ageHours(iso: string | null) {
+  if (!iso) return null;
+  return Math.max(0, (Date.now() - Date.parse(iso)) / 3_600_000);
+}
+
+function ageDays(date: string | null) {
+  if (!date) return null;
+  const parsed = Date.parse(`${date}T23:59:59-07:00`);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, (Date.now() - parsed) / 86_400_000);
+}
+
+function hourlySeries(points: ReturnType<typeof enrichHourlyHistory>) {
+  const definitions = [
+    ['forebayFt', 'Lake Roosevelt', 'ft'],
+    ['totalOutflowKcfs', 'Total outflow', 'kcfs'],
+    ['generationFlowKcfs', 'Generation flow', 'kcfs'],
+    ['spillKcfs', 'Spill', 'kcfs'],
+    ['headFt', 'Hydraulic head', 'ft'],
+    ['estimatedGenerationMW', 'Estimated generation', 'MW']
+  ] as const;
+  return definitions.filter(([key]) => points.some(point => point[key] !== null)).map(([key, label, unit]) => ({ key, label, unit }));
+}
+
+function dailySeries(points: Awaited<ReturnType<typeof getDailyObservations>>) {
+  const definitions = [
+    ['averageGenerationMW', 'Reported average generation', 'MW'],
+    ['reservoirElevationFt', 'Reservoir elevation', 'ft'],
+    ['totalOutflowKcfs', 'Total outflow', 'kcfs'],
+    ['spillKcfs', 'Spill', 'kcfs'],
+    ['banksLakePumpKcfs', 'Banks Lake pump flow', 'kcfs']
+  ] as const;
+  return definitions.filter(([key]) => points.some(point => point[key] !== null)).map(([key, label, unit]) => ({ key, label, unit }));
+}
 
 export async function GET(request: NextRequest) {
   const range = request.nextUrl.searchParams.get('range') ?? '24h';
@@ -11,19 +47,40 @@ export async function GET(request: NextRequest) {
   try {
     const daily = await getDailyObservations();
     const calibration = buildCalibration(daily);
+
     if (range === '24h') {
       const hourly = await getHourlyObservations();
-      const cutoff = Date.now() - 24 * 3_600_000;
+      const latestMs = hourly.length ? Math.max(...hourly.map(row => Date.parse(row.observedAt))) : NaN;
+      if (!Number.isFinite(latestMs)) throw new Error('No valid hourly history timestamps were returned.');
+      const cutoff = latestMs - 24 * 3_600_000;
+      const selected = hourly.filter(row => Date.parse(row.observedAt) >= cutoff);
+      const points = enrichHourlyHistory(selected, calibration.efficiency);
+      const through = points.at(-1)?.observedAt ?? null;
       return NextResponse.json({
         range,
-        points: hourly.filter(row => Date.parse(row.observedAt) >= cutoff).map(row => ({
-          ...row,
-          estimatedGenerationMW: estimateGenerationMW(row.generationFlowKcfs, row.headFt, calibration.efficiency)
-        }))
+        basis: 'hourly',
+        windowLabel: '24 hours ending at the latest available hourly observation',
+        through,
+        sourceAgeHours: ageHours(through),
+        points,
+        series: hourlySeries(points),
+        insights: deriveHourlyInsights(points)
       });
     }
+
     const days = range === '7d' ? 7 : 30;
-    return NextResponse.json({ range, points: daily.slice(-days) });
+    const points = daily.slice(-days);
+    const through = points.at(-1)?.date ?? null;
+    return NextResponse.json({
+      range,
+      basis: 'daily',
+      windowLabel: `${points.length} reported days ending at the latest available daily observation`,
+      through,
+      sourceAgeDays: ageDays(through),
+      points,
+      series: dailySeries(points),
+      insights: deriveDailyInsights(points)
+    });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'History unavailable' }, { status: 503 });
   }

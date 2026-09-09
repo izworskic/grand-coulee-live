@@ -89,6 +89,14 @@ export interface GrandCouleeStatus {
     change24hFt: number | null;
     belowFullPoolFt: number | null;
   };
+  lakeForecast: {
+    sourceObservedDate: string | null;
+    sourceObservedElevationFt: number | null;
+    nextDate: string | null;
+    nextElevationFt: number | null;
+    finalDate: string | null;
+    finalElevationFt: number | null;
+  } | null;
   flow: {
     totalOutflowKcfs: number | null;
     generationFlowKcfs: number | null;

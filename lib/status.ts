@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { getAstronomy } from '@/lib/data/astronomy';
+import { getCwmsDailyRiverContext } from '@/lib/data/cwms';
 import { getLakeLevelForecast, LAKE_LEVEL_URL } from '@/lib/data/lakeLevel';
 import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOURLY_URL, ZONE } from '@/lib/data/usace';
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
@@ -105,9 +106,10 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
 export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const retrievedAt = new Date().toISOString();
   const now = DateTime.now().setZone(ZONE);
-  const [hourlyResult, dailyResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
+  const [hourlyResult, dailyResult, riverContextResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
     getHourlyObservations(),
     getDailyObservations(),
+    getCwmsDailyRiverContext(),
     getWeather(),
     verifyReclamationSources(),
     getLakeLevelForecast()
@@ -115,6 +117,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const hourly = hourlyResult.status === 'fulfilled' ? hourlyResult.value : [];
   const daily = dailyResult.status === 'fulfilled' ? dailyResult.value : [];
+  const riverContext = riverContextResult.status === 'fulfilled' ? riverContextResult.value : { observedAt: null, inflowKcfs: null, dailyOutflowKcfs: null, precipitationIn: null };
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const reclamationHealthy = sourceHealthResult.status === 'fulfilled' ? sourceHealthResult.value : false;
   const rawLakeForecast = lakeForecastResult.status === 'fulfilled' ? lakeForecastResult.value : null;
@@ -136,6 +139,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const observedAt = latest?.observedAt ?? null;
   const currentFreshness = freshness(observedAt);
+  const riverContextFreshness = riverContextResult.status === 'fulfilled' ? freshness(riverContext.observedAt) : 'unavailable';
   const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
   const calibrationFreshness = dailyFreshness(calibration.latestDate, now);
   const lakeForecastFreshness = forecastFreshness(rawLakeForecast?.finalForecast?.date ?? null, now);
@@ -166,6 +170,16 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       note: telemetry.state === 'complete'
         ? 'All five core operational series are publishing at the latest observation.'
         : `Partial telemetry: ${telemetry.availableCoreSeries}/${telemetry.totalCoreSeries} core fields are numeric at the latest observation. Missing: ${telemetry.missingCoreSeries.join(', ') || 'none'}. Each field is handled independently and missing values are never replaced with zero.`
+    },
+    {
+      id: 'usace-daily-river',
+      label: 'USACE CWMS Data API · Grand Coulee daily river context',
+      url: USACE_HOURLY_URL,
+      kind: 'reported',
+      observedAt: riverContext.observedAt,
+      retrievedAt,
+      freshness: riverContextFreshness,
+      note: 'Latest daily-average inflow and outflow plus daily precipitation. These values provide basin context and never substitute for missing hourly spill, turbine-flow, tailwater, gate-count or plant-power telemetry.'
     },
     {
       id: 'usace-tailwater-curve',
@@ -252,6 +266,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       generationFlowKcfs: latest?.generationFlowKcfs ?? null,
       spillKcfs: latest?.spillKcfs ?? null
     },
+    riverContext,
     hydraulic: {
       tailwaterFt: latest?.tailwaterFt ?? null,
       headFt: latest?.headFt ?? null,

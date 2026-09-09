@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon';
 import { getAstronomy } from '@/lib/data/astronomy';
 import { getCwmsDailyRiverContext } from '@/lib/data/cwms';
+import { DART_DAILY_URL, getLatestDartGrandCouleeDaily } from '@/lib/data/dart';
 import { getLakeLevelForecast, LAKE_LEVEL_URL } from '@/lib/data/lakeLevel';
 import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOURLY_URL, ZONE } from '@/lib/data/usace';
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
@@ -106,10 +107,11 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
 export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const retrievedAt = new Date().toISOString();
   const now = DateTime.now().setZone(ZONE);
-  const [hourlyResult, dailyResult, riverContextResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
+  const [hourlyResult, dailyResult, riverContextResult, dartDailyResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
     getHourlyObservations(),
     getDailyObservations(),
     getCwmsDailyRiverContext(),
+    getLatestDartGrandCouleeDaily(),
     getWeather(),
     verifyReclamationSources(),
     getLakeLevelForecast()
@@ -117,7 +119,14 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const hourly = hourlyResult.status === 'fulfilled' ? hourlyResult.value : [];
   const daily = dailyResult.status === 'fulfilled' ? dailyResult.value : [];
-  const riverContext = riverContextResult.status === 'fulfilled' ? riverContextResult.value : { observedAt: null, inflowKcfs: null, dailyOutflowKcfs: null, precipitationIn: null };
+  const cwmsRiverContext = riverContextResult.status === 'fulfilled' ? riverContextResult.value : { observedAt: null, inflowKcfs: null, dailyOutflowKcfs: null, precipitationIn: null };
+  const dartDaily = dartDailyResult.status === 'fulfilled' ? dartDailyResult.value : null;
+  const riverContext: GrandCouleeStatus['riverContext'] = {
+    ...cwmsRiverContext,
+    dailySpillDate: dartDaily?.date ?? null,
+    dailySpillKcfs: dartDaily?.spillKcfs ?? null,
+    dailySpillPercent: dartDaily?.spillPercent ?? null
+  };
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const reclamationHealthy = sourceHealthResult.status === 'fulfilled' ? sourceHealthResult.value : false;
   const rawLakeForecast = lakeForecastResult.status === 'fulfilled' ? lakeForecastResult.value : null;
@@ -139,7 +148,8 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const observedAt = latest?.observedAt ?? null;
   const currentFreshness = freshness(observedAt);
-  const riverContextFreshness = riverContextResult.status === 'fulfilled' ? freshness(riverContext.observedAt) : 'unavailable';
+  const riverContextFreshness = riverContextResult.status === 'fulfilled' ? freshness(cwmsRiverContext.observedAt) : 'unavailable';
+  const dartDailyFreshness = dartDailyResult.status === 'fulfilled' ? dailyFreshness(dartDaily?.date ?? null, now) : 'unavailable';
   const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
   const calibrationFreshness = dailyFreshness(calibration.latestDate, now);
   const lakeForecastFreshness = forecastFreshness(rawLakeForecast?.finalForecast?.date ?? null, now);
@@ -176,10 +186,22 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       label: 'USACE CWMS Data API · Grand Coulee daily river context',
       url: USACE_HOURLY_URL,
       kind: 'reported',
-      observedAt: riverContext.observedAt,
+      observedAt: cwmsRiverContext.observedAt,
       retrievedAt,
       freshness: riverContextFreshness,
       note: 'Latest daily-average inflow and outflow plus daily precipitation. These values provide basin context and never substitute for missing hourly spill, turbine-flow, tailwater, gate-count or plant-power telemetry.'
+    },
+    {
+      id: 'dart-daily-spill',
+      label: 'Columbia River DART · Grand Coulee daily river environment',
+      url: DART_DAILY_URL,
+      kind: 'reported',
+      observedAt: dartDaily?.date ?? null,
+      retrievedAt,
+      freshness: dartDailyFreshness,
+      note: dartDaily
+        ? 'DART daily spill is a 24-hour average in kcfs; spill percent is calculated from daily spill divided by daily outflow. It is context only and never drives the current spill animation or the hourly spill state.'
+        : 'DART daily spill query is currently unavailable or returned no usable Grand Coulee record. The app leaves daily spill blank rather than inferring it.'
     },
     {
       id: 'usace-tailwater-curve',

@@ -1,11 +1,14 @@
 import * as cheerio from 'cheerio';
 import { DateTime } from 'luxon';
+import { CWMS_LOCATION_URL, getCwmsHourlyObservations } from '@/lib/data/cwms';
 import type { DailyObservation, HourlyObservation } from '@/lib/types';
 
 export const ZONE = 'America/Los_Angeles';
-export const USACE_HOURLY_URL = 'https://public.crohms.org/dd/nwdp/project_hourly/webexec/rep?ago=0&r=gcl';
+export const USACE_HOURLY_URL = CWMS_LOCATION_URL;
 export const USACE_DAILY_URL = 'https://public.crohms.org/dd/nwdp/project_daily/webexec/rep?ago=0&r=gcl';
 
+const LEGACY_HOURLY_BASE = 'https://public.crohms.org/dd/nwdp/project_hourly/webexec/rep';
+const LEGACY_DAILY_BASE = 'https://public.crohms.org/dd/nwdp/project_daily/webexec/rep';
 const HEADERS = { 'User-Agent': 'GrandCouleeLive/1.0 chrisizworski.com' };
 
 function num(value: string): number | null {
@@ -95,16 +98,42 @@ async function fetchText(url: string): Promise<string> {
   return response.text();
 }
 
-export async function getHourlyObservations(): Promise<HourlyObservation[]> {
-  const urls = [0, 1].map(ago => `https://public.crohms.org/dd/nwdp/project_hourly/webexec/rep?ago=${ago}&r=gcl`);
+async function getLegacyHourlyObservations(): Promise<HourlyObservation[]> {
+  const urls = [0, 1].map(ago => `${LEGACY_HOURLY_BASE}?ago=${ago}&r=gcl`);
   const settled = await Promise.allSettled(urls.map(fetchText));
   const rows = settled.flatMap(result => result.status === 'fulfilled' ? parseHourlyHtml(result.value) : []);
-  if (!rows.length) throw new Error('No valid USACE hourly observations were returned.');
+  if (!rows.length) throw new Error('No valid legacy USACE hourly observations were returned.');
   return rows.sort((a, b) => Date.parse(a.observedAt) - Date.parse(b.observedAt));
 }
 
+function latestObservedAt(rows: HourlyObservation[]) {
+  return rows.length ? Date.parse(rows[rows.length - 1].observedAt) : 0;
+}
+
+export async function getHourlyObservations(): Promise<HourlyObservation[]> {
+  const [cwmsResult, legacyResult] = await Promise.allSettled([
+    getCwmsHourlyObservations(),
+    getLegacyHourlyObservations()
+  ]);
+
+  const candidates = [cwmsResult, legacyResult]
+    .filter((result): result is PromiseFulfilledResult<HourlyObservation[]> => result.status === 'fulfilled' && result.value.length > 0)
+    .map(result => result.value)
+    .sort((a, b) => latestObservedAt(b) - latestObservedAt(a));
+
+  if (!candidates.length) {
+    const errors = [cwmsResult, legacyResult]
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map(result => result.reason instanceof Error ? result.reason.message : String(result.reason));
+    throw new Error(`No valid USACE hourly observations were returned. ${errors.join(' | ')}`);
+  }
+
+  return candidates[0];
+}
+
 export async function getDailyObservations(): Promise<DailyObservation[]> {
-  const urls = [1, 0].map(ago => `https://public.crohms.org/dd/nwdp/project_daily/webexec/rep?ago=${ago}&r=gcl`);
+  // Pull a wider rolling archive so generation calibration/backtesting is not limited to one month.
+  const urls = Array.from({ length: 13 }, (_, ago) => `${LEGACY_DAILY_BASE}?ago=${ago}&r=gcl`);
   const settled = await Promise.allSettled(urls.map(fetchText));
   const rows = settled.flatMap(result => result.status === 'fulfilled' ? parseDailyHtml(result.value) : []);
   if (!rows.length) throw new Error('No valid USACE daily observations were returned.');

@@ -8,7 +8,7 @@ type HotspotId = 'reservoir' | 'spillway' | 'left' | 'right' | 'third' | 'pumps'
 
 const detailCopy: Record<HotspotId, { title: string; body: string }> = {
   reservoir: { title: 'Lake Roosevelt', body: 'Franklin D. Roosevelt Lake stores Columbia River water upstream of the dam. Its elevation changes with flood-risk management, power, irrigation and other operating requirements.' },
-  spillway: { title: 'Spillway', body: 'The central spillway passes water that is not routed through generating units. The animation here responds only to the reported USACE spill field.' },
+  spillway: { title: 'Spillway', body: 'The central spillway passes water that is not routed through generating units. The animation here responds only to a numeric USACE spill observation and never assumes missing spill telemetry means zero.' },
   left: { title: 'Left Powerhouse', body: 'One of the original powerhouse areas. Water drops through penstocks and spins turbine-generator units before returning to the Columbia River.' },
   right: { title: 'Right Powerhouse', body: 'The other original powerhouse area, part of the immense generating complex built into and beside the dam.' },
   third: { title: 'Nathaniel “Nat” Washington Power Plant', body: 'The Third Power Plant dramatically expanded Grand Coulee’s generating capability and contains the project’s largest generating units.' },
@@ -51,7 +51,10 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
   const [engineering, setEngineering] = useState(false);
   const below = Math.max(0, Math.min(35, status.reservoir.belowFullPoolFt ?? 8));
   const waterY = 60 + below * 0.7;
-  const spilling = (status.flow.spillKcfs ?? 0) > 0.05;
+  const spilling = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
+  const spillLabel = status.flow.spillKcfs === null ? 'SPILL STATUS UNAVAILABLE' : spilling ? 'SPILL ACTIVE' : 'NOT SPILLING';
+  const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
+  const headIsEstimated = status.hydraulic.headSource === 'rating-curve';
   const current = detailCopy[selected];
 
   const choose = (id: HotspotId) => {
@@ -92,15 +95,14 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
           <path d="M120 430 C280 405 390 418 510 430 C655 445 780 428 1000 408 L1000 560 L0 560 L0 463Z" fill="#2c6f83" opacity=".9"/>
 
           {flowMode && <g className="flow-layer" aria-hidden="true">
-            <path className="flow-path turbine-flow" d="M260 105 C275 220 280 285 290 420"/>
-            <path className="flow-path turbine-flow delay" d="M715 105 C710 220 718 310 716 425"/>
+            {status.flow.generationFlowKcfs !== null && <><path className="flow-path turbine-flow" d="M260 105 C275 220 280 285 290 420"/><path className="flow-path turbine-flow delay" d="M715 105 C710 220 718 310 716 425"/></>}
             {spilling && <path className="flow-path spill-flow" d="M505 170 C505 250 510 330 512 430"/>}
-            <path className="flow-path pump-flow" d="M850 305 C900 250 925 185 970 150"/>
+            {status.pumping.banksLakePumpKcfs !== null && <path className="flow-path pump-flow" d="M850 305 C900 250 925 185 970 150"/>}
           </g>}
 
           {engineering && <g className="engineering-labels" aria-hidden="true">
             <text x="500" y="145">Crest length 5,223 ft</text>
-            <text x="500" y="392">Hydraulic head {n(status.hydraulic.headFt, 1)} ft</text>
+            <text x="500" y="392">Hydraulic head {n(displayHead, 1)} ft{headIsEstimated ? ' est.' : ''}</text>
             <text x="170" y="185">Full pool 1,290 ft</text>
             <text x="800" y="448">Installed capacity 6,809 MW</text>
           </g>}
@@ -117,10 +119,10 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
         <span className="eyebrow">SELECTED COMPONENT</span>
         <h3>{current.title}</h3><p>{current.body}</p>
         {selected === 'reservoir' && <div className="detail-live"><strong>{n(status.reservoir.forebayFt, 2)} ft</strong><span>{signed(status.reservoir.change24hFt, ' ft / 24h')}</span></div>}
-        {selected === 'spillway' && <div className="detail-live"><strong>{spilling ? 'SPILL ACTIVE' : 'NOT SPILLING'}</strong><span>{n(status.flow.spillKcfs, 2)} kcfs reported</span></div>}
+        {selected === 'spillway' && <div className="detail-live"><strong>{spillLabel}</strong><span>{status.flow.spillKcfs === null ? 'No numeric USACE spill observation is currently publishing' : `${n(status.flow.spillKcfs, 2)} kcfs reported`}</span></div>}
         {selected === 'pumps' && <div className="detail-live"><strong>{status.pumping.banksLakePumpKcfs !== null ? `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs` : 'Latest data unavailable'}</strong><span>Banks Lake pumping flow</span></div>}
         {selected === 'visitor' && <div className="detail-live"><strong>{status.visitor.visitorCenterStatus.toUpperCase()}</strong><span>{status.visitor.visitorCenterDetail}</span></div>}
-        {engineering && <dl className="engineering-list"><div><dt>Dam height</dt><dd>550 ft</dd></div><div><dt>Crest length</dt><dd>5,223 ft</dd></div><div><dt>Full pool</dt><dd>1,290 ft</dd></div><div><dt>Current head</dt><dd>{n(status.hydraulic.headFt, 1)} ft</dd></div></dl>}
+        {engineering && <dl className="engineering-list"><div><dt>Dam height</dt><dd>550 ft</dd></div><div><dt>Crest length</dt><dd>5,223 ft</dd></div><div><dt>Full pool</dt><dd>1,290 ft</dd></div><div><dt>{headIsEstimated ? 'Estimated head' : 'Current head'}</dt><dd>{n(displayHead, 1)} ft</dd></div>{headIsEstimated && <div><dt>Head method</dt><dd>USACE rating curve · low confidence</dd></div>}</dl>}
       </aside>
     </div>
   </section>;
@@ -138,8 +140,8 @@ function HistoryChart() {
   return <section className="history-section" aria-labelledby="history-heading">
     <div><span className="eyebrow">LAST 24 HOURS</span><h2 id="history-heading">Operating trend</h2></div>
     <div className="chart-card">
-      {path ? <svg viewBox="0 0 800 210" role="img" aria-label="Estimated generation trend over the last 24 hours"><line x1="20" y1="180" x2="780" y2="180" className="chart-axis"/><path d={path} className="chart-line"/></svg> : <p className="muted">Waiting for enough current hourly observations to draw the 24-hour trend.</p>}
-      <p className="chart-note">Estimated MW trend is derived from the same turbine-flow and hydraulic-head model used in the hero. It is not an official instantaneous plant-generation feed.</p>
+      {path ? <svg viewBox="0 0 800 210" role="img" aria-label="Estimated generation trend over the last 24 hours"><line x1="20" y1="180" x2="780" y2="180" className="chart-axis"/><path d={path} className="chart-line"/></svg> : <p className="muted">Waiting for enough current turbine-flow observations to draw the generation trend.</p>}
+      <p className="chart-note">Estimated MW appears only when current turbine flow and a measured or explicitly estimated hydraulic head are available. Missing telemetry is never treated as zero.</p>
     </div>
   </section>;
 }
@@ -152,7 +154,8 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const spillActive = (status.flow.spillKcfs ?? 0) > 0.05;
+  const spillActive = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
+  const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
   const updated = status.observedAt ? datePacific(status.observedAt) : 'Operational feed unavailable';
   const capacityPct = status.generation.currentEstimatedMW === null ? null : (status.generation.currentEstimatedMW / status.generation.installedCapacityMW) * 100;
   const holidayClosure = status.visitor.visitorCenterDetail.toLowerCase().includes('federal holiday');
@@ -161,15 +164,16 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
     <header className="hero">
       <nav className="topbar"><a href="https://chrisizworski.com" className="brand">CHRISIZWORSKI.COM</a><span>National Tools · Pacific Northwest</span></nav>
       <div className="hero-inner">
-        <div className="hero-copy"><span className="eyebrow">LIVE INFRASTRUCTURE · GRAND COULEE, WASHINGTON</span><h1>GRAND COULEE <em>LIVE</em></h1><p className="lead">See what Grand Coulee is doing right now.</p><p className="support">Live water conditions, estimated power generation, spillway activity, tours, laser-show timing and an interactive look inside one of America’s largest hydropower projects.</p><div className={`freshness ${status.freshness}`}><span className="pulse"/>{status.freshness.toUpperCase()} · {updated}</div></div>
+        <div className="hero-copy"><span className="eyebrow">LIVE INFRASTRUCTURE · GRAND COULEE, WASHINGTON</span><h1>GRAND COULEE <em>LIVE</em></h1><p className="lead">See what Grand Coulee is doing right now.</p><p className="support">Live water conditions, power-generation estimates when the required telemetry is available, spill status, tours, laser-show timing and an interactive look inside one of America’s largest hydropower projects.</p><div className={`freshness ${status.freshness}`}><span className="pulse"/>{status.freshness.toUpperCase()} · {updated}</div></div>
         <div className="decision-card"><span className="eyebrow">SHOULD I GO NOW?</span><h2>{status.decision.headline}</h2><p>{status.decision.detail}</p><div className="decision-weather">{status.weather ? `${n(status.weather.temperatureF,0)}°F · ${status.weather.shortForecast}` : 'Weather temporarily unavailable'}</div></div>
       </div>
 
       <section className="metric-grid" aria-label="Current Grand Coulee conditions">
-        <Metric label="Estimated generation now" value={status.generation.currentEstimatedMW === null ? 'Unavailable' : `${n(status.generation.currentEstimatedMW, 0)} MW`} sub={capacityPct === null ? 'USACE inputs unavailable' : `${n(capacityPct,0)}% of 6,809 MW capacity · ${status.generation.estimateConfidence ?? 'unknown'} confidence`} tag="ESTIMATED" />
+        <Metric label="Estimated generation now" value={status.generation.currentEstimatedMW === null ? 'Unavailable' : `${n(status.generation.currentEstimatedMW, 0)} MW`} sub={capacityPct === null ? 'Current turbine-flow telemetry unavailable' : `${n(capacityPct,0)}% of 6,809 MW capacity · ${status.generation.estimateConfidence ?? 'unknown'} confidence`} tag="ESTIMATED" />
         <Metric label="Lake Roosevelt" value={status.reservoir.forebayFt === null ? 'Unavailable' : `${n(status.reservoir.forebayFt, 2)} ft`} sub={`${signed(status.reservoir.change24hFt, ' ft / 24h')} · ${status.reservoir.belowFullPoolFt === null ? 'full-pool comparison unavailable' : `${n(status.reservoir.belowFullPoolFt,2)} ft below full pool`}`} tag="MEASURED" />
-        <Metric label="Spillway" value={status.flow.spillKcfs === null ? 'Unavailable' : spillActive ? 'SPILL ACTIVE' : 'NOT SPILLING'} sub={status.flow.spillKcfs === null ? 'USACE spill field unavailable' : `${n(status.flow.spillKcfs, 2)} kcfs reported`} tag="MEASURED" />
-        <Metric label="Total outflow" value={status.flow.totalOutflowKcfs === null ? 'Unavailable' : `${n(status.flow.totalOutflowKcfs, 1)} kcfs`} sub={status.flow.generationFlowKcfs === null ? 'Generation flow unavailable' : `${n(status.flow.generationFlowKcfs,1)} kcfs through generation`} tag="MEASURED" />
+        <Metric label="Spillway" value={status.flow.spillKcfs === null ? 'STATUS UNAVAILABLE' : spillActive ? 'SPILL ACTIVE' : 'NOT SPILLING'} sub={status.flow.spillKcfs === null ? 'USACE spill series currently has no numeric observation' : `${n(status.flow.spillKcfs, 2)} kcfs reported`} tag="MEASURED" />
+        <Metric label="Total outflow" value={status.flow.totalOutflowKcfs === null ? 'Unavailable' : `${n(status.flow.totalOutflowKcfs, 1)} kcfs`} sub={status.flow.generationFlowKcfs === null ? 'Generation-flow telemetry unavailable' : `${n(status.flow.generationFlowKcfs,1)} kcfs through generation`} tag="MEASURED" />
+        <Metric label="Hydraulic head" value={displayHead === null ? 'Unavailable' : `${n(displayHead, 1)} ft`} sub={status.hydraulic.headSource === 'measured' ? 'Measured forebay minus measured tailwater' : status.hydraulic.headSource === 'rating-curve' ? `Estimated tailwater ${n(status.hydraulic.estimatedTailwaterFt,1)} ft · USACE rating curve` : 'Required hydraulic inputs unavailable'} tag={status.hydraulic.headSource === 'rating-curve' ? 'ESTIMATED' : 'MEASURED'} />
         <Metric label="Visitor Center" value={status.visitor.visitorCenterStatus.toUpperCase()} sub={status.visitor.visitorCenterDetail} tag="REPORTED" />
         <Metric label="Next plant tour" value={status.visitor.nextTour ? formatPacific(status.visitor.nextTour) : 'NO TOUR NOW'} sub={status.visitor.nextTourDetail} tag="REPORTED" />
         <Metric label="Laser show" value={status.visitor.laserStatus === 'tonight' && status.visitor.laserTime ? formatPacific(status.visitor.laserTime) : status.visitor.laserStatus === 'completed' ? 'ENDED TONIGHT' : status.visitor.laserStatus === 'off-season' ? 'OFF SEASON' : 'VERIFY SCHEDULE'} sub={status.visitor.laserDetail} tag="REPORTED" />
@@ -187,9 +191,9 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
 
     <HistoryChart />
 
-    <section className="explain-section"><span className="eyebrow">HOW TO READ THIS TOOL</span><h2>Measured when possible. Estimated only when necessary.</h2><div className="explain-grid"><article><h3>Water is observed</h3><p>Forebay elevation, outflow, turbine flow, spill, tailwater and hydraulic head come from the USACE Grand Coulee operational tables.</p></article><article><h3>Generation is estimated</h3><p>There is no claim here that the hourly water table is an instantaneous plant-wide MW meter. Estimated generation uses hydraulic physics and a rolling calibration against reported daily Grand Coulee generation.</p></article><article><h3>Visitor times are reported</h3><p>Visitor Center hours, tours and the laser show come from current Bureau of Reclamation visitor information. Future years are not assumed.</p></article></div></section>
+    <section className="explain-section"><span className="eyebrow">HOW TO READ THIS TOOL</span><h2>Measured when published. Estimated only when explicitly labeled.</h2><div className="explain-grid"><article><h3>Operational telemetry is field-by-field</h3><p>Grand Coulee Live reads the USACE CWMS series independently. A current forebay or outflow value does not cause a missing spill, generation-flow or tailwater value to be treated as zero.</p></article><article><h3>Generation uses physics + calibration</h3><p>Estimated generation requires turbine flow and hydraulic head. The model is calibrated against reported Grand Coulee generation and is withheld whenever current turbine-flow telemetry is absent.</p></article><article><h3>Tailwater has a cautious fallback</h3><p>If measured tailwater is missing, Engineering Mode may show a low-confidence estimate from the official USACE Water Control Manual rating curve. USACE notes that Rufus Woods Lake backwater affects actual tailwater.</p></article><article><h3>Visitor times are reported</h3><p>Visitor Center hours, tours and the laser show come from current Bureau of Reclamation visitor information. Future years are not assumed.</p></article></div></section>
 
-    <section className="faq-section"><span className="eyebrow">GRAND COULEE QUESTIONS</span><h2>What visitors usually want to know</h2><details><summary>How high is Lake Roosevelt right now?</summary><p>{status.reservoir.forebayFt === null ? 'The current USACE forebay value is temporarily unavailable.' : `The latest Grand Coulee forebay observation is ${n(status.reservoir.forebayFt,2)} feet, ${n(status.reservoir.belowFullPoolFt,2)} feet below the 1,290-foot full-pool reference.`}</p></details><details><summary>Is Grand Coulee Dam spilling today?</summary><p>{status.flow.spillKcfs === null ? 'The USACE spill field is temporarily unavailable.' : spillActive ? `Yes. The latest reported spill is ${n(status.flow.spillKcfs,2)} kcfs.` : 'No meaningful spill is reported in the latest USACE observation.'}</p></details><details><summary>How much electricity is Grand Coulee generating?</summary><p>{status.generation.currentEstimatedMW === null ? 'The current estimate is unavailable because one or more required hydraulic inputs are missing.' : `Grand Coulee Live estimates approximately ${n(status.generation.currentEstimatedMW,0)} MW from current turbine flow and hydraulic head. This is an estimate, not an official instantaneous MW reading.`}</p></details><details><summary>Can you tour Grand Coulee Dam?</summary><p>In the verified 2026 schedule, Reclamation offers free John W. Keys III Pump-Generating Plant tours Friday through Sunday from May 22 through October 31. Tours are first come, first served and can change or be canceled without notice.</p></details><details><summary>What time is the Grand Coulee laser show?</summary><p>{status.visitor.laserDetail}</p></details></section>
+    <section className="faq-section"><span className="eyebrow">GRAND COULEE QUESTIONS</span><h2>What visitors usually want to know</h2><details><summary>How high is Lake Roosevelt right now?</summary><p>{status.reservoir.forebayFt === null ? 'The current USACE forebay value is temporarily unavailable.' : `The latest Grand Coulee forebay observation is ${n(status.reservoir.forebayFt,2)} feet, ${n(status.reservoir.belowFullPoolFt,2)} feet below the 1,290-foot full-pool reference.`}</p></details><details><summary>Is Grand Coulee Dam spilling today?</summary><p>{status.flow.spillKcfs === null ? 'The USACE spill series is currently not publishing a numeric observation, so Grand Coulee Live does not infer a yes/no spill state.' : spillActive ? `Yes. The latest reported spill is ${n(status.flow.spillKcfs,2)} kcfs.` : 'No meaningful spill is reported in the latest numeric USACE observation.'}</p></details><details><summary>How much electricity is Grand Coulee generating?</summary><p>{status.generation.currentEstimatedMW === null ? 'The current estimate is unavailable because current turbine-flow telemetry is not publishing. The model remains ready and will resume automatically when the required USACE inputs return.' : `Grand Coulee Live estimates approximately ${n(status.generation.currentEstimatedMW,0)} MW from current turbine flow and hydraulic head. This is an estimate, not an official instantaneous MW reading.`}</p></details><details><summary>Can you tour Grand Coulee Dam?</summary><p>In the verified 2026 schedule, Reclamation offers free John W. Keys III Pump-Generating Plant tours Friday through Sunday from May 22 through October 31. Tours are first come, first served and can change or be canceled without notice.</p></details><details><summary>What time is the Grand Coulee laser show?</summary><p>{status.visitor.laserDetail}</p></details></section>
 
     <section className="sources-section" id="sources"><span className="eyebrow">DATA SOURCES & METHODOLOGY</span><h2>Where every first-screen number comes from</h2><div className="source-list">{status.sources.map(source => <a key={source.id} href={source.url} target="_blank" rel="noreferrer"><div><strong>{source.label}</strong><p>{source.note ?? `${source.kind} data`}</p></div><span className={`source-status ${source.freshness}`}>{source.freshness}</span></a>)}</div><p className="method-note">Operational data may be provisional and subject to revision. GRAND COULEE LIVE is an independent public-information tool and is not operated by or affiliated with the Bureau of Reclamation, U.S. Army Corps of Engineers, Bonneville Power Administration or National Park Service.</p></section>
 

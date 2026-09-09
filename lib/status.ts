@@ -4,6 +4,7 @@ import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOU
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
 import { getWeather } from '@/lib/data/weather';
 import { buildCalibration, estimateGenerationMW, INSTALLED_CAPACITY_MW } from '@/lib/generation';
+import { estimateHeadFromRatingCurve, estimateTailwaterFromOutflow, GRAND_COULEE_WCM_URL } from '@/lib/hydraulics';
 import type { Confidence, Freshness, GrandCouleeStatus, HourlyObservation, SourceProvenance } from '@/lib/types';
 
 const FULL_POOL_FT = 1290;
@@ -27,8 +28,9 @@ function dailyFreshness(date: string | null, now: DateTime): Freshness {
   return 'stale';
 }
 
-function estimateConfidence(base: Confidence, hourly: Freshness, calibration: Freshness): Confidence {
+function estimateConfidence(base: Confidence, hourly: Freshness, calibration: Freshness, usesEstimatedHead: boolean): Confidence {
   if (hourly === 'stale' || hourly === 'unavailable' || calibration === 'stale' || calibration === 'unavailable') return 'low';
+  if (usesEstimatedHead) return 'low';
   if (hourly === 'delayed' || calibration === 'delayed') return base === 'low' ? 'low' : 'medium';
   return base;
 }
@@ -89,7 +91,17 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const latestDaily = daily.filter(row => Object.values(row).some(v => typeof v === 'number')).at(-1) ?? null;
   const latestReported = [...daily].reverse().find(row => row.averageGenerationMW !== null) ?? null;
   const calibration = buildCalibration(daily);
-  const generationMW = estimateGenerationMW(latest?.generationFlowKcfs ?? null, latest?.headFt ?? null, calibration.efficiency);
+
+  const estimatedTailwaterFt = latest?.tailwaterFt === null || latest?.tailwaterFt === undefined
+    ? estimateTailwaterFromOutflow(latest?.totalOutflowKcfs ?? null)
+    : null;
+  const estimatedHeadFt = latest?.headFt === null || latest?.headFt === undefined
+    ? estimateHeadFromRatingCurve(latest?.forebayFt ?? null, latest?.totalOutflowKcfs ?? null)
+    : null;
+  const headForGeneration = latest?.headFt ?? estimatedHeadFt;
+  const usesEstimatedHead = latest?.headFt === null || latest?.headFt === undefined;
+  const generationMW = estimateGenerationMW(latest?.generationFlowKcfs ?? null, headForGeneration, calibration.efficiency);
+
   const observedAt = latest?.observedAt ?? null;
   const currentFreshness = freshness(observedAt);
   const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
@@ -97,6 +109,9 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const astronomy = getAstronomy(now);
   const visitor = getVisitorStatus(now, reclamationHealthy);
   const pumpingUsable = dailySourceFreshness === 'current' || dailySourceFreshness === 'delayed';
+  const headSource: GrandCouleeStatus['hydraulic']['headSource'] = latest?.headFt !== null && latest?.headFt !== undefined
+    ? 'measured'
+    : estimatedHeadFt !== null ? 'rating-curve' : 'unavailable';
 
   const sources: SourceProvenance[] = [
     {
@@ -107,7 +122,17 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       observedAt,
       retrievedAt,
       freshness: hourlyResult.status === 'fulfilled' ? currentFreshness : 'unavailable',
-      note: 'CWMS API is primary for total outflow, generation flow, spill, forebay and tailwater; the legacy CROHMS hourly report remains a freshness-ranked fallback. Hydraulic head is calculated from forebay minus tailwater. Individual fields remain unavailable when USACE publishes no numeric observations.'
+      note: 'CWMS API is primary for total outflow, generation flow, spill, forebay and tailwater; the legacy CROHMS hourly report remains a freshness-ranked fallback. Individual fields remain unavailable when USACE publishes no numeric observations.'
+    },
+    {
+      id: 'usace-tailwater-curve',
+      label: 'USACE Water Control Manual · Grand Coulee tailwater rating curve',
+      url: GRAND_COULEE_WCM_URL,
+      kind: 'estimated',
+      observedAt,
+      retrievedAt,
+      freshness: estimatedHeadFt !== null ? currentFreshness : 'unavailable',
+      note: 'Used only when measured tailwater is unavailable. Tailwater is linearly interpolated from Plate 7-5 using current total outflow; USACE cautions that Rufus Woods Lake backwater affects actual tailwater, so this fallback is explicitly low confidence.'
     },
     {
       id: 'usace-daily',
@@ -174,11 +199,14 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
     },
     hydraulic: {
       tailwaterFt: latest?.tailwaterFt ?? null,
-      headFt: latest?.headFt ?? null
+      headFt: latest?.headFt ?? null,
+      estimatedTailwaterFt,
+      estimatedHeadFt,
+      headSource
     },
     generation: {
       currentEstimatedMW: generationMW,
-      estimateConfidence: calibration.efficiency === null ? null : estimateConfidence(calibration.confidence, currentFreshness, calibrationFreshness),
+      estimateConfidence: generationMW === null || calibration.efficiency === null ? null : estimateConfidence(calibration.confidence, currentFreshness, calibrationFreshness, usesEstimatedHead),
       calibrationEfficiency: calibration.efficiency,
       calibrationDays: calibration.days,
       calibrationLatestDate: calibration.latestDate,

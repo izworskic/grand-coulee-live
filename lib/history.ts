@@ -1,5 +1,6 @@
 import type { DailyObservation, HourlyObservation } from '@/lib/types';
 import { estimateGenerationMW } from '@/lib/generation';
+import { estimateHeadFromRatingCurve } from '@/lib/hydraulics';
 
 export type HistoryInsight = {
   id: string;
@@ -9,6 +10,7 @@ export type HistoryInsight = {
 
 export type HourlyHistoryPoint = HourlyObservation & {
   estimatedGenerationMW: number | null;
+  estimatedHeadFt: number | null;
 };
 
 function pctChange(from: number, to: number): number | null {
@@ -27,10 +29,15 @@ function latestAtOrBefore<T extends { observedAt: string }>(rows: T[], targetMs:
 }
 
 export function enrichHourlyHistory(rows: HourlyObservation[], efficiency: number | null): HourlyHistoryPoint[] {
-  return rows.map(row => ({
-    ...row,
-    estimatedGenerationMW: estimateGenerationMW(row.generationFlowKcfs, row.headFt, efficiency)
-  }));
+  return rows.map(row => {
+    const estimatedHeadFt = row.headFt === null ? estimateHeadFromRatingCurve(row.forebayFt, row.totalOutflowKcfs) : null;
+    const headForGeneration = row.headFt ?? estimatedHeadFt;
+    return {
+      ...row,
+      estimatedHeadFt,
+      estimatedGenerationMW: estimateGenerationMW(row.generationFlowKcfs, headForGeneration, efficiency)
+    };
+  });
 }
 
 export function deriveHourlyInsights(rows: HourlyHistoryPoint[]): HistoryInsight[] {
@@ -70,7 +77,7 @@ export function deriveHourlyInsights(rows: HourlyHistoryPoint[]): HistoryInsight
   if (generationRows.length >= 2) {
     const latestGeneration = generationRows.at(-1)!;
     const sixHoursPrior = latestAtOrBefore(generationRows, Date.parse(latestGeneration.observedAt) - 6 * 3_600_000);
-    if (sixHoursPrior?.estimatedGenerationMW !== null && latestGeneration.estimatedGenerationMW !== null) {
+    if (sixHoursPrior && sixHoursPrior.estimatedGenerationMW !== null && latestGeneration.estimatedGenerationMW !== null) {
       const change = latestGeneration.estimatedGenerationMW - sixHoursPrior.estimatedGenerationMW;
       if (Math.abs(change) >= 25) {
         insights.push({ id: 'generation-change', label: 'DERIVED', text: `Estimated generation changed by ${fmtSigned(change, 0, ' MW')} over roughly six hours.` });

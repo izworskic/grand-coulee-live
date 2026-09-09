@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CurrentConditions } from '@/components/CurrentConditions';
+import { OperationsHistory } from '@/components/OperationsHistory';
 import type { GrandCouleeStatus } from '@/lib/types';
 
 type Props = { initialStatus: GrandCouleeStatus };
@@ -69,12 +71,24 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
     window.gtag?.('event', 'dam_hotspot_click', { hotspot: id });
   };
 
+  const toggleFlowMode = () => setFlowMode(currentValue => {
+    const next = !currentValue;
+    window.gtag?.('event', 'dam_flow_mode', { enabled: next });
+    return next;
+  });
+
+  const toggleEngineering = () => setEngineering(currentValue => {
+    const next = !currentValue;
+    window.gtag?.('event', 'dam_engineering_mode', { enabled: next });
+    return next;
+  });
+
   return <section className="dam-section" aria-labelledby="dam-heading">
     <div className="section-heading-row">
       <div><span className="eyebrow">INTERACTIVE DAM</span><h2 id="dam-heading">See how Grand Coulee works</h2></div>
       <div className="mode-controls" role="group" aria-label="Dam display modes">
-        <button className={flowMode ? 'active' : ''} onClick={() => setFlowMode(v => !v)} aria-pressed={flowMode}>Flow mode</button>
-        <button className={engineering ? 'active' : ''} onClick={() => setEngineering(v => !v)} aria-pressed={engineering}>Engineering mode</button>
+        <button className={flowMode ? 'active' : ''} onClick={toggleFlowMode} aria-pressed={flowMode}>Flow mode</button>
+        <button className={engineering ? 'active' : ''} onClick={toggleEngineering} aria-pressed={engineering}>Engineering mode</button>
       </div>
     </div>
 
@@ -135,24 +149,6 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
   </section>;
 }
 
-function HistoryChart() {
-  const [points, setPoints] = useState<Array<{ observedAt: string; forebayFt: number | null; spillKcfs: number | null; estimatedGenerationMW: number | null }>>([]);
-  useEffect(() => { fetch('/api/history?range=24h').then(r => r.ok ? r.json() : null).then(data => data?.points && setPoints(data.points)).catch(() => undefined); }, []);
-  const path = useMemo(() => {
-    const vals = points.map(p => p.estimatedGenerationMW).filter((v): v is number => v !== null);
-    if (vals.length < 2) return '';
-    const min = Math.min(...vals), max = Math.max(...vals), span = Math.max(1, max - min);
-    return vals.map((v, i) => `${i ? 'L' : 'M'} ${20 + (i/(vals.length-1))*760} ${180 - ((v-min)/span)*130}`).join(' ');
-  }, [points]);
-  return <section className="history-section" aria-labelledby="history-heading">
-    <div><span className="eyebrow">LAST 24 HOURS</span><h2 id="history-heading">Operating trend</h2></div>
-    <div className="chart-card">
-      {path ? <svg viewBox="0 0 800 210" role="img" aria-label="Estimated generation trend over the last 24 hours"><line x1="20" y1="180" x2="780" y2="180" className="chart-axis"/><path d={path} className="chart-line"/></svg> : <p className="muted">Waiting for enough current turbine-flow observations to draw the generation trend.</p>}
-      <p className="chart-note">Estimated MW appears only when current turbine flow and a measured or explicitly estimated hydraulic head are available. Missing telemetry is never treated as zero.</p>
-    </div>
-  </section>;
-}
-
 export function GrandCouleeDashboard({ initialStatus }: Props) {
   const [status, setStatus] = useState(initialStatus);
   useEffect(() => {
@@ -205,7 +201,8 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
       <div className="banks-card"><span className="eyebrow">COLUMBIA BASIN PROJECT</span><h2>Pumping toward Banks Lake</h2><div className="big-number">{status.pumping.banksLakePumpKcfs === null ? '—' : `${n(status.pumping.banksLakePumpKcfs,2)} kcfs`}</div><p>Latest reported pumping flow. Grand Coulee also moves Columbia River water into Banks Lake for the Columbia Basin Project.</p>{status.pumping.banksLakeElevationFt !== null && <span className="minor-stat">Banks Lake {n(status.pumping.banksLakeElevationFt,2)} ft</span>}</div>
     </section>
 
-    <HistoryChart />
+    <CurrentConditions status={status} />
+    <OperationsHistory />
 
     <section className="explain-section"><span className="eyebrow">HOW TO READ THIS TOOL</span><h2>Measured when published. Estimated only when explicitly labeled.</h2><div className="explain-grid"><article><h3>Operational telemetry is field-by-field</h3><p>Grand Coulee Live reads the USACE CWMS series independently. A current forebay or outflow value does not cause a missing spill, generation-flow or tailwater value to be treated as zero.</p></article><article><h3>Generation uses physics + calibration</h3><p>Estimated generation requires turbine flow and hydraulic head. The model is calibrated against reported Grand Coulee generation and is withheld whenever current turbine-flow telemetry is absent.</p></article><article><h3>Tailwater has a cautious fallback</h3><p>If measured tailwater is missing, Engineering Mode may show a low-confidence estimate from the official USACE Water Control Manual rating curve. Historical validation across 367 daily observations produced 0.31 ft MAE and 0.85 ft 95th-percentile absolute error, while USACE still notes that Rufus Woods Lake backwater can affect actual tailwater.</p></article><article><h3>Forecast stays separate from measured</h3><p>Bureau of Reclamation midnight Lake Roosevelt forecasts are shown only as planning context. The live lake-level card remains anchored to the measured CWMS forebay value.</p></article></div></section>
 

@@ -45,13 +45,18 @@ function delta(rows: HourlyObservation[], latest: HourlyObservation | null, hour
   return latest.forebayFt - prior.forebayFt;
 }
 
+function spillPhrase(spillKcfs: number | null): string {
+  if (spillKcfs === null) return 'spill status unavailable';
+  return spillKcfs > 0.05 ? 'active spill' : 'no meaningful spill reported';
+}
+
 function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow' | 'astronomy'>) {
   const precip = status.weather?.precipitationProbability ?? 0;
-  const spill = status.flow.spillKcfs ?? 0;
+  const spill = spillPhrase(status.flow.spillKcfs);
   if (status.visitor.laserStatus === 'tonight') {
     return {
       headline: status.visitor.visitorCenterStatus === 'open' ? 'GOOD VISITOR WINDOW' : 'COME LATER FOR THE LASER SHOW',
-      detail: `${precip <= 30 ? 'Low precipitation risk' : 'Some rain risk'}, ${spill > 0 ? 'active spill' : 'no meaningful spill reported'}, sunset ${status.astronomy.sunset}, and tonight's laser show ${status.visitor.laserDetail.toLowerCase()}.`
+      detail: `${precip <= 30 ? 'Low precipitation risk' : 'Some rain risk'}, ${spill}, sunset ${status.astronomy.sunset}, and tonight's laser show ${status.visitor.laserDetail.toLowerCase()}.`
     };
   }
   if (status.visitor.visitorCenterStatus === 'open') {
@@ -102,7 +107,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       observedAt,
       retrievedAt,
       freshness: hourlyResult.status === 'fulfilled' ? currentFreshness : 'unavailable',
-      note: 'CWMS API is primary for total outflow, generation flow, spill, forebay and tailwater; the legacy CROHMS hourly report remains a freshness-ranked fallback. Hydraulic head is calculated from forebay minus tailwater.'
+      note: 'CWMS API is primary for total outflow, generation flow, spill, forebay and tailwater; the legacy CROHMS hourly report remains a freshness-ranked fallback. Hydraulic head is calculated from forebay minus tailwater. Individual fields remain unavailable when USACE publishes no numeric observations.'
     },
     {
       id: 'usace-daily',

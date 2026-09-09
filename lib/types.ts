@@ -91,6 +91,9 @@ export interface GrandCouleeStatus {
   hydraulic: {
     tailwaterFt: number | null;
     headFt: number | null;
+    estimatedTailwaterFt: number | null;
+    estimatedHeadFt: number | null;
+    headSource: 'measured' | 'rating-curve' | 'unavailable';
   };
   generation: {
     currentEstimatedMW: number | null;

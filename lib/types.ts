@@ -97,6 +97,7 @@ export interface GrandCouleeStatus {
     estimateConfidence: Confidence | null;
     calibrationEfficiency: number | null;
     calibrationDays: number;
+    calibrationLatestDate: string | null;
     latestReportedAverageMW: number | null;
     latestReportedDate: string | null;
     installedCapacityMW: number;

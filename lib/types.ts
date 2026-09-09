@@ -107,6 +107,13 @@ export interface GrandCouleeStatus {
     inflowKcfs: number | null;
     dailyOutflowKcfs: number | null;
   };
+  recentRiver: {
+    outflow7dAverageKcfs: number | null;
+    currentOutflowVs7dPct: number | null;
+    lake7dChangeFt: number | null;
+    dailyInflowMinusOutflowKcfs: number | null;
+    signal: string | null;
+  };
   hydraulic: {
     tailwaterFt: number | null;
     headFt: number | null;

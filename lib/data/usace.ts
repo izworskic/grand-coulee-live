@@ -1,5 +1,6 @@
 import * as cheerio from 'cheerio';
 import { DateTime } from 'luxon';
+import { unstable_cache } from 'next/cache';
 import { CWMS_LOCATION_URL, getCwmsHourlyObservations } from '@/lib/data/cwms';
 import type { DailyObservation, HourlyObservation } from '@/lib/types';
 
@@ -110,7 +111,7 @@ function latestObservedAt(rows: HourlyObservation[]) {
   return rows.length ? Date.parse(rows[rows.length - 1].observedAt) : 0;
 }
 
-export async function getHourlyObservations(): Promise<HourlyObservation[]> {
+async function getHourlyObservationsFresh(): Promise<HourlyObservation[]> {
   const [cwmsResult, legacyResult] = await Promise.allSettled([
     getCwmsHourlyObservations(),
     getLegacyHourlyObservations()
@@ -131,7 +132,7 @@ export async function getHourlyObservations(): Promise<HourlyObservation[]> {
   return candidates[0];
 }
 
-export async function getDailyObservations(): Promise<DailyObservation[]> {
+async function getDailyObservationsFresh(): Promise<DailyObservation[]> {
   // Pull a wider rolling archive so generation calibration/backtesting is not limited to one month.
   const urls = Array.from({ length: 13 }, (_, ago) => `${LEGACY_DAILY_BASE}?ago=${ago}&r=gcl`);
   const settled = await Promise.allSettled(urls.map(fetchText));
@@ -139,4 +140,29 @@ export async function getDailyObservations(): Promise<DailyObservation[]> {
   if (!rows.length) throw new Error('No valid USACE daily observations were returned.');
   const deduped = new Map(rows.map(row => [row.date, row]));
   return [...deduped.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Cache normalized/validated results as well as the underlying HTTP responses. If a
+// federal page redesign or transient upstream failure makes a refresh throw, Next's
+// time-based Data Cache continues serving the last successfully generated value.
+// The observation timestamps are preserved, so the UI will mark that retained value
+// delayed/stale rather than misrepresenting it as current.
+const getCachedHourlyObservations = unstable_cache(
+  getHourlyObservationsFresh,
+  ['grand-coulee-normalized-hourly-v2'],
+  { revalidate: 600, tags: ['grand-coulee-hourly'] }
+);
+
+const getCachedDailyObservations = unstable_cache(
+  getDailyObservationsFresh,
+  ['grand-coulee-normalized-daily-v2'],
+  { revalidate: 1800, tags: ['grand-coulee-daily'] }
+);
+
+export async function getHourlyObservations(): Promise<HourlyObservation[]> {
+  return getCachedHourlyObservations();
+}
+
+export async function getDailyObservations(): Promise<DailyObservation[]> {
+  return getCachedDailyObservations();
 }

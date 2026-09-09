@@ -19,6 +19,9 @@ jobs:
       - name: Validate generation model against reported daily history
         continue-on-error: true
         run: npm run backtest
+      - name: Check major upstream sources
+        continue-on-error: true
+        run: node scripts/probe-sources.mjs
       - name: Probe live Grand Coulee CWMS series
         continue-on-error: true
         run: node scripts/probe-cwms.mjs

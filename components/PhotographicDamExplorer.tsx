@@ -113,6 +113,22 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
         </div>
       </div>
 
+      {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee daily river context">
+        <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
+        <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
+        <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
+        <div><span>Spill</span><strong>{status.riverContext.dailySpillKcfs === null ? '—' : `${n(status.riverContext.dailySpillKcfs, 2)} kcfs`}</strong><small>{status.riverContext.dailySpillDate ? `${shortDate(status.riverContext.dailySpillDate)} daily avg${status.riverContext.dailySpillPercent === null ? '' : ` · ${n(status.riverContext.dailySpillPercent, 1)}%`}` : '—'}</small></div>
+        <div><span>Precipitation</span><strong>{status.riverContext.precipitationIn === null ? '—' : `${n(status.riverContext.precipitationIn, 2)} in`}</strong><small>daily total</small></div>
+      </div>}
+
+      <div className="photo-dam-key" aria-label="Dam structure key">
+        {HOTSPOTS.map((point, index) => (
+          <button key={point.id} className={selected === point.id ? 'selected' : ''} onClick={() => choose(point.id)}>
+            <span>{index + 1}</span>{point.short}
+          </button>
+        ))}
+      </div>
+
       <div className="photo-dam-grid">
         <div className="dam-photo-card">
           <div className="dam-photo-stage">
@@ -156,22 +172,6 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
           {detailValue && <div className="photo-detail-live"><span>{selected === 'spillway' && status.flow.spillKcfs === null && status.riverContext.dailySpillKcfs !== null ? 'DAILY' : 'NOW'}</span><strong>{detailValue}</strong></div>}
           <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />
         </aside>
-      </div>
-
-      {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee daily river context">
-        <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
-        <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
-        <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
-        <div><span>Spill</span><strong>{status.riverContext.dailySpillKcfs === null ? '—' : `${n(status.riverContext.dailySpillKcfs, 2)} kcfs`}</strong><small>{status.riverContext.dailySpillDate ? `${shortDate(status.riverContext.dailySpillDate)} daily avg${status.riverContext.dailySpillPercent === null ? '' : ` · ${n(status.riverContext.dailySpillPercent, 1)}%`}` : '—'}</small></div>
-        <div><span>Precipitation</span><strong>{status.riverContext.precipitationIn === null ? '—' : `${n(status.riverContext.precipitationIn, 2)} in`}</strong><small>daily total</small></div>
-      </div>}
-
-      <div className="photo-dam-key" aria-label="Dam structure key">
-        {HOTSPOTS.map((point, index) => (
-          <button key={point.id} className={selected === point.id ? 'selected' : ''} onClick={() => choose(point.id)}>
-            <span>{index + 1}</span>{point.short}
-          </button>
-        ))}
       </div>
     </section>
   );

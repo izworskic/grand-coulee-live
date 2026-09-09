@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
-const file = 'components/GrandCouleeDashboard.tsx';
-let source = fs.readFileSync(file, 'utf8');
+const dashboardFile = 'components/GrandCouleeDashboard.tsx';
+let source = fs.readFileSync(dashboardFile, 'utf8');
 let changed = false;
 
 if (!source.includes("import { VisitPlanner } from '@/components/VisitPlanner';")) {
@@ -18,5 +18,16 @@ if (!source.includes('<VisitPlanner status={status} />')) {
   changed = true;
 }
 
-fs.writeFileSync(file, source);
-console.log(changed ? 'Visit planner integrated into dashboard.' : 'Visit planner already integrated.');
+fs.writeFileSync(dashboardFile, source);
+
+const plannerFile = 'lib/visitPlanner.ts';
+let planner = fs.readFileSync(plannerFile, 'utf8');
+const untyped = "  let selectedTour = (tourPriority ? realisticallyReachable : realisticallyReachable.filter(dep => dep.diff(arrival, 'minutes').minutes >= 35))[0] ?? null;";
+const typed = "  let selectedTour: DateTime | null = (tourPriority ? realisticallyReachable : realisticallyReachable.filter(dep => dep.diff(arrival, 'minutes').minutes >= 35))[0] ?? null;";
+if (planner.includes(untyped)) {
+  planner = planner.replace(untyped, typed);
+  fs.writeFileSync(plannerFile, planner);
+  changed = true;
+}
+
+console.log(changed ? 'Visit planner integration/type fix applied.' : 'Visit planner already integrated.');

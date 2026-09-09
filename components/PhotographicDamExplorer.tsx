@@ -57,6 +57,18 @@ function n(value: number | null, digits = 1) {
   return value === null || !Number.isFinite(value) ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
 }
 
+function contextTime(value: string | null) {
+  if (!value) return 'Source time unavailable';
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  }).format(new Date(value));
+}
+
 export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus }) {
   const [selected, setSelected] = useState<HotspotId>('spillway');
   const [flowMode, setFlowMode] = useState(true);
@@ -65,6 +77,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
   const spilling = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
   const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
   const headEstimated = status.hydraulic.headSource === 'rating-curve';
+  const hasRiverContext = [status.riverContext.inflowKcfs, status.riverContext.dailyOutflowKcfs, status.riverContext.precipitationIn].some(value => value !== null);
 
   const choose = (id: HotspotId) => {
     setSelected(id);
@@ -73,7 +86,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
 
   const detailValue = (() => {
     if (selected === 'reservoir') return status.reservoir.forebayFt === null ? 'Live level unavailable' : `${n(status.reservoir.forebayFt, 2)} ft measured`;
-    if (selected === 'spillway') return status.flow.spillKcfs === null ? 'Spill status unavailable' : spilling ? `${n(status.flow.spillKcfs, 2)} kcfs spilling` : 'No meaningful spill reported';
+    if (selected === 'spillway') return status.flow.spillKcfs === null ? 'Hourly spill telemetry unavailable' : spilling ? `${n(status.flow.spillKcfs, 2)} kcfs spilling` : 'No meaningful spill reported';
     if (selected === 'pumps') return status.pumping.banksLakePumpKcfs === null ? 'Pumping flow unavailable' : `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs pumping`;
     if (selected === 'visitor') return status.visitor.visitorCenterStatus.toUpperCase();
     return null;
@@ -140,6 +153,13 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
           {engineering && <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />}
         </aside>
       </div>
+
+      {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee daily river context">
+        <div className="river-context-heading"><span className="eyebrow">LATEST DAILY RIVER CONTEXT</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS</small></div>
+        <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
+        <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
+        <div><span>Precipitation</span><strong>{status.riverContext.precipitationIn === null ? '—' : `${n(status.riverContext.precipitationIn, 2)} in`}</strong><small>daily total</small></div>
+      </div>}
 
       <div className="photo-dam-key" aria-label="Dam structure key">
         {HOTSPOTS.map((point, index) => (

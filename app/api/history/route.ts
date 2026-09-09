@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDailyObservations, getHourlyObservations } from '@/lib/data/usace';
+import { DateTime } from 'luxon';
+import { getDailyObservations, getHourlyObservations, ZONE } from '@/lib/data/usace';
 import { buildCalibration } from '@/lib/generation';
 import { deriveDailyInsights, deriveHourlyInsights, enrichHourlyHistory } from '@/lib/history';
 
@@ -7,14 +8,16 @@ export const revalidate = 900;
 
 function ageHours(iso: string | null) {
   if (!iso) return null;
-  return Math.max(0, (Date.now() - Date.parse(iso)) / 3_600_000);
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, (Date.now() - parsed) / 3_600_000);
 }
 
 function ageDays(date: string | null) {
   if (!date) return null;
-  const parsed = Date.parse(`${date}T23:59:59-07:00`);
-  if (!Number.isFinite(parsed)) return null;
-  return Math.max(0, (Date.now() - parsed) / 86_400_000);
+  const observed = DateTime.fromISO(date, { zone: ZONE }).endOf('day');
+  if (!observed.isValid) return null;
+  return Math.max(0, DateTime.now().setZone(ZONE).diff(observed, 'days').days);
 }
 
 function hourlySeries(points: ReturnType<typeof enrichHourlyHistory>) {

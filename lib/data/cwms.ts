@@ -16,15 +16,13 @@ export const GCL_CWMS_SERIES = {
 
 export const GCL_CWMS_DAILY_SERIES = {
   inflow: 'GCL.Flow-In.Ave.~1Day.1Day.CBT-REV',
-  outflow: 'GCL.Flow-Out.Ave.~1Day.1Day.CBT-REV',
-  precipitation: 'GCL.Precip-Inc.Total.~1Day.1Day.CBT-RAW'
+  outflow: 'GCL.Flow-Out.Ave.~1Day.1Day.CBT-REV'
 } as const;
 
 export interface CwmsDailyRiverContext {
   observedAt: string | null;
   inflowKcfs: number | null;
   dailyOutflowKcfs: number | null;
-  precipitationIn: number | null;
 }
 
 const ZONE = 'America/Los_Angeles';
@@ -41,7 +39,7 @@ type CwmsSeriesResponse = {
 };
 
 type SeriesRows = Array<{ timestamp: number; value: number | null }>;
-type CwmsUnit = 'cfs' | 'ft' | 'in';
+type CwmsUnit = 'cfs' | 'ft';
 
 export function parseCwmsSeries(payload: unknown): SeriesRows {
   if (!payload || typeof payload !== 'object') return [];
@@ -104,22 +102,19 @@ function latestNumeric(rows: SeriesRows): { timestamp: number; value: number } |
 export async function getCwmsDailyRiverContext(): Promise<CwmsDailyRiverContext> {
   const settled = await Promise.allSettled([
     fetchSeries(GCL_CWMS_DAILY_SERIES.inflow, 'cfs', 7 * 24),
-    fetchSeries(GCL_CWMS_DAILY_SERIES.outflow, 'cfs', 7 * 24),
-    fetchSeries(GCL_CWMS_DAILY_SERIES.precipitation, 'in', 7 * 24)
+    fetchSeries(GCL_CWMS_DAILY_SERIES.outflow, 'cfs', 7 * 24)
   ]);
-  const [inflowRows, outflowRows, precipRows] = settled.map(rowsOrEmpty);
+  const [inflowRows, outflowRows] = settled.map(rowsOrEmpty);
   const inflow = latestNumeric(inflowRows);
   const outflow = latestNumeric(outflowRows);
-  const precip = latestNumeric(precipRows);
-  const timestamps = [inflow?.timestamp, outflow?.timestamp, precip?.timestamp].filter((value): value is number => typeof value === 'number');
+  const timestamps = [inflow?.timestamp, outflow?.timestamp].filter((value): value is number => typeof value === 'number');
 
-  if (!inflow && !outflow && !precip) throw new Error('CWMS returned no numeric Grand Coulee daily river context.');
+  if (!inflow && !outflow) throw new Error('CWMS returned no numeric Grand Coulee daily river context.');
 
   return {
     observedAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
     inflowKcfs: inflow ? inflow.value / 1000 : null,
-    dailyOutflowKcfs: outflow ? outflow.value / 1000 : null,
-    precipitationIn: precip?.value ?? null
+    dailyOutflowKcfs: outflow ? outflow.value / 1000 : null
   };
 }
 

@@ -1,4 +1,5 @@
-const base = 'https://cwms-data.usace.army.mil/cwms-data/timeseries';
+const root = 'https://cwms-data.usace.army.mil/cwms-data';
+const base = `${root}/timeseries`;
 const office = 'NWDP';
 const series = [
   ['totalOutflow', 'GCL.Flow-Out.Ave.1Hour.1Hour.CBT-REV', 'cfs'],
@@ -8,9 +9,45 @@ const series = [
   ['tailwater', 'GCL.Elev-Tailwater.Inst.1Hour.0.CBT-REV', 'ft']
 ];
 
+const headers = { Accept: 'application/json;version=2' };
 const end = new Date();
 const begin = new Date(end.getTime() - 12 * 60 * 60 * 1000);
 let failed = false;
+
+async function inspectCatalog() {
+  const candidates = [
+    `${root}/timeseries/catalog?office=${office}&timeseries-id-like=${encodeURIComponent('GCL.%')}&page-size=500`,
+    `${root}/catalog/timeseries?office=${office}&like=${encodeURIComponent('GCL.*')}&page-size=500`
+  ];
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
+      const text = await response.text();
+      if (!response.ok) {
+        console.log(`catalog ${url}: HTTP ${response.status}`);
+        continue;
+      }
+      let payload;
+      try { payload = JSON.parse(text); } catch { continue; }
+      const entries = Array.isArray(payload.entries) ? payload.entries : [];
+      const names = entries
+        .map(entry => entry?.name)
+        .filter(name => typeof name === 'string' && name.startsWith('GCL.'))
+        .sort();
+      console.log(`catalog endpoint: ${url}`);
+      console.log(`GCL catalog entries (${names.length}):`);
+      for (const name of names) console.log(`  ${name}`);
+      return names;
+    } catch (error) {
+      console.log(`catalog ${url}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  console.log('No JSON GCL catalog response available from tested catalog endpoints.');
+  return [];
+}
+
+await inspectCatalog();
 
 for (const [label, name, unit] of series) {
   const params = new URLSearchParams({
@@ -25,7 +62,7 @@ for (const [label, name, unit] of series) {
 
   try {
     const response = await fetch(`${base}?${params}`, {
-      headers: { Accept: 'application/json;version=2' },
+      headers,
       signal: AbortSignal.timeout(12000)
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);

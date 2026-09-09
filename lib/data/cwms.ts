@@ -14,6 +14,19 @@ export const GCL_CWMS_SERIES = {
   tailwater: 'GCL.Elev-Tailwater.Inst.1Hour.0.CBT-REV'
 } as const;
 
+export const GCL_CWMS_DAILY_SERIES = {
+  inflow: 'GCL.Flow-In.Ave.~1Day.1Day.CBT-REV',
+  outflow: 'GCL.Flow-Out.Ave.~1Day.1Day.CBT-REV',
+  precipitation: 'GCL.Precip-Inc.Total.~1Day.1Day.CBT-RAW'
+} as const;
+
+export interface CwmsDailyRiverContext {
+  observedAt: string | null;
+  inflowKcfs: number | null;
+  dailyOutflowKcfs: number | null;
+  precipitationIn: number | null;
+}
+
 const ZONE = 'America/Los_Angeles';
 const HEADERS = {
   Accept: 'application/json;version=2',
@@ -28,6 +41,7 @@ type CwmsSeriesResponse = {
 };
 
 type SeriesRows = Array<{ timestamp: number; value: number | null }>;
+type CwmsUnit = 'cfs' | 'ft' | 'in';
 
 export function parseCwmsSeries(payload: unknown): SeriesRows {
   if (!payload || typeof payload !== 'object') return [];
@@ -43,7 +57,7 @@ export function parseCwmsSeries(payload: unknown): SeriesRows {
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-async function fetchSeries(name: string, unit: 'cfs' | 'ft', lookbackHours = 72): Promise<SeriesRows> {
+async function fetchSeries(name: string, unit: CwmsUnit, lookbackHours = 72): Promise<SeriesRows> {
   const end = new Date();
   const begin = new Date(end.getTime() - lookbackHours * 3_600_000);
   const params = new URLSearchParams({
@@ -77,6 +91,36 @@ function valuesByTime(rows: SeriesRows) {
 function latestNumericTimestamp(rows: SeriesRows) {
   const numeric = rows.filter(row => row.value !== null);
   return numeric.length ? numeric[numeric.length - 1].timestamp : 0;
+}
+
+function latestNumeric(rows: SeriesRows): { timestamp: number; value: number } | null {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (row.value !== null && Number.isFinite(row.value)) return { timestamp: row.timestamp, value: row.value };
+  }
+  return null;
+}
+
+export async function getCwmsDailyRiverContext(): Promise<CwmsDailyRiverContext> {
+  const settled = await Promise.allSettled([
+    fetchSeries(GCL_CWMS_DAILY_SERIES.inflow, 'cfs', 7 * 24),
+    fetchSeries(GCL_CWMS_DAILY_SERIES.outflow, 'cfs', 7 * 24),
+    fetchSeries(GCL_CWMS_DAILY_SERIES.precipitation, 'in', 7 * 24)
+  ]);
+  const [inflowRows, outflowRows, precipRows] = settled.map(rowsOrEmpty);
+  const inflow = latestNumeric(inflowRows);
+  const outflow = latestNumeric(outflowRows);
+  const precip = latestNumeric(precipRows);
+  const timestamps = [inflow?.timestamp, outflow?.timestamp, precip?.timestamp].filter((value): value is number => typeof value === 'number');
+
+  if (!inflow && !outflow && !precip) throw new Error('CWMS returned no numeric Grand Coulee daily river context.');
+
+  return {
+    observedAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
+    inflowKcfs: inflow ? inflow.value / 1000 : null,
+    dailyOutflowKcfs: outflow ? outflow.value / 1000 : null,
+    precipitationIn: precip?.value ?? null
+  };
 }
 
 export async function getCwmsHourlyObservations(): Promise<HourlyObservation[]> {

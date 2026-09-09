@@ -68,8 +68,6 @@ function delta(rows: HourlyObservation[], latest: HourlyObservation | null, hour
 }
 
 function telemetryStatus(latest: HourlyObservation | null): GrandCouleeStatus['telemetry'] {
-  // These are the two current hourly signals the public product promises.
-  // Generation flow, spill and tailwater remain optional engineering enhancements.
   const fields: Array<[string, number | null | undefined]> = [
     ['total outflow', latest?.totalOutflowKcfs],
     ['Lake Roosevelt elevation', latest?.forebayFt]
@@ -84,48 +82,31 @@ function telemetryStatus(latest: HourlyObservation | null): GrandCouleeStatus['t
   };
 }
 
-function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow' | 'reservoir' | 'riverContext'>) {
-  const liveParts: string[] = [];
-
-  if (status.reservoir.forebayFt !== null) {
+function liveObservation(status: Pick<GrandCouleeStatus, 'flow' | 'reservoir'>): string {
+  if (status.reservoir.forebayFt !== null && status.reservoir.change24hFt !== null) {
     const change = status.reservoir.change24hFt;
-    const movement = change === null
-      ? ''
-      : Math.abs(change) < 0.01
-        ? ' and is essentially steady over 24 hours'
-        : `, ${change > 0 ? 'up' : 'down'} ${Math.abs(change).toFixed(2)} ft in 24 hours`;
-    liveParts.push(`Lake Roosevelt is ${status.reservoir.forebayFt.toFixed(2)} ft${movement}`);
+    if (Math.abs(change) < 0.01) return `Lake Roosevelt is ${status.reservoir.forebayFt.toFixed(2)} ft and steady over 24 hours.`;
+    return `Lake Roosevelt is ${status.reservoir.forebayFt.toFixed(2)} ft, ${change > 0 ? 'up' : 'down'} ${Math.abs(change).toFixed(2)} ft in 24 hours.`;
   }
+  if (status.flow.totalOutflowKcfs !== null) return `Current Columbia River outflow is ${status.flow.totalOutflowKcfs.toFixed(1)} kcfs.`;
+  if (status.reservoir.forebayFt !== null) return `Lake Roosevelt is ${status.reservoir.forebayFt.toFixed(2)} ft.`;
+  return '';
+}
 
-  if (status.flow.totalOutflowKcfs !== null) {
-    liveParts.push(`Current Columbia River outflow is ${status.flow.totalOutflowKcfs.toFixed(1)} kcfs`);
-  }
-
-  if (status.riverContext.inflowKcfs !== null && status.riverContext.dailyOutflowKcfs !== null) {
-    const difference = status.riverContext.inflowKcfs - status.riverContext.dailyOutflowKcfs;
-    if (Math.abs(difference) >= 1) {
-      liveParts.push(`Daily inflow is ${status.riverContext.inflowKcfs.toFixed(1)} kcfs versus ${status.riverContext.dailyOutflowKcfs.toFixed(1)} kcfs outflow`);
-    }
-  }
-
-  const liveSentence = liveParts.length ? `${liveParts.join('. ')} .`.replace(' .', '.') : '';
-  const weather = status.weather
-    ? status.weather.temperatureF === null
-      ? ` ${status.weather.shortForecast} right now.`
-      : ` ${status.weather.temperatureF.toFixed(0)}°F and ${status.weather.shortForecast.toLowerCase()} right now.`
-    : '';
+function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'flow' | 'reservoir'>) {
+  const live = liveObservation(status);
 
   if (status.visitor.visitorCenterStatus === 'open') {
     return {
-      headline: status.visitor.nextTour ? 'VISITOR CENTER OPEN · TOUR AHEAD' : 'VISITOR CENTER IS OPEN',
-      detail: `${liveSentence}${weather}${status.visitor.nextTour ? ` ${status.visitor.nextTourDetail}` : ''}`.trim()
+      headline: status.visitor.nextTour ? 'TOUR AHEAD' : 'VISITOR CENTER OPEN',
+      detail: `${live}${status.visitor.nextTour ? ` ${status.visitor.nextTourDetail}` : ''}`.trim()
     };
   }
 
   const centerDetail = status.visitor.visitorCenterDetail || 'Visitor Center is closed right now.';
   return {
-    headline: centerDetail.toLowerCase().includes('opens') ? 'VISITOR CENTER OPENS LATER' : 'CHECK THE DAM BEFORE YOU GO',
-    detail: `${centerDetail} ${liveSentence}${weather}`.trim()
+    headline: centerDetail.toLowerCase().includes('opens') ? 'VISITOR CENTER OPENS LATER' : 'SEE THE DAM ON YOUR TIME',
+    detail: `${centerDetail} ${live}`.trim()
   };
 }
 

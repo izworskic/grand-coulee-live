@@ -1,0 +1,27 @@
+.return-visit{
+  margin-top:1rem;
+  padding-top:.9rem;
+  border-top:1px solid var(--line);
+}
+.return-visit>span{
+  display:block;
+  margin-bottom:.3rem;
+  color:#28695c;
+  font-family:"SFMono-Regular",Consolas,monospace;
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.06em;
+}
+.return-visit>strong{
+  display:block;
+  margin-bottom:.2rem;
+  color:var(--ink);
+  font-family:"Avenir Next","Segoe UI",ui-sans-serif,system-ui,sans-serif;
+  font-size:.98rem;
+}
+.return-visit>p{
+  margin:.18rem 0 0;
+  color:var(--muted);
+  font-size:.9rem;
+  line-height:1.45;
+}

@@ -6,7 +6,7 @@ Operational + visitor intelligence for Grand Coulee Dam. Standalone Next.js appl
 
 > What is Grand Coulee Dam doing right now, what will I see if I go, and when should I visit today?
 
-The application combines Grand Coulee operational telemetry, a physically based generation estimator, Lake Roosevelt context, official visitor schedules, NWS weather, astronomy, Banks Lake pumping context and an interactive educational dam representation.
+The application combines Grand Coulee operational telemetry, a physically based generation estimator, Lake Roosevelt context and forecast information, official visitor schedules, NWS weather, astronomy, Banks Lake pumping context, source-relative operating history, derived change intelligence and an interactive educational dam representation.
 
 ## Operational data architecture
 
@@ -31,7 +31,7 @@ Grand Coulee location: `https://water.usace.army.mil/overview/nwdp/locations/gcl
 - Hourly: `https://public.crohms.org/dd/nwdp/project_hourly/webexec/rep?ago=0&r=gcl`
 - Daily: `https://public.crohms.org/dd/nwdp/project_daily/webexec/rep?ago=0&r=gcl`
 
-The hourly adapter compares valid CWMS and CROHMS results and uses the fresher observation set. Daily CROHMS reports provide reported generation and Banks Lake context for calibration/backtesting.
+The hourly adapter compares valid CWMS and CROHMS results and uses the fresher observation set. Daily CROHMS reports provide reported generation and Banks Lake context for calibration, history and backtesting.
 
 ### Partial-live behavior
 
@@ -105,6 +105,24 @@ Current 13-month benchmark:
 
 Release target is ≤8% overall MAPE. The current backtest clears that target, but model accuracy does not override missing real-time inputs.
 
+## Operations history and derived intelligence
+
+The history API and UI support `24h`, `7d` and `30d` views.
+
+- 24-hour history is anchored to the latest available hourly observation.
+- 7-day and 30-day history use the latest available reported daily observations.
+- Every history view exposes its `through` timestamp/date and source age so a delayed federal source cannot masquerade as a current calendar window.
+- Derived observations can describe reservoir movement, outflow changes, spill transitions and generation changes.
+- Derived observations are labeled `DERIVED` and never infer operator intent or causation.
+
+## Engineering Mode
+
+Verified Bureau of Reclamation engineering facts are centralized in `lib/engineering.ts` rather than duplicated across the UI. The engineering configuration reconciles to the official **6,809 MW** total generating capacity and provides powerhouse/unit context plus spillway configuration. Engineering Mode remains optional so the default visitor experience stays simple.
+
+## Camera/current-view policy
+
+Grand Coulee Live does **not** label a static photograph as a live camera. No verified dam-facing government webcam has been accepted for the current product. The `CURRENT CONDITIONS AT THE DAM` module therefore combines current weather/telemetry with an official Bureau of Reclamation reference photograph explicitly marked `REFERENCE IMAGE · NOT LIVE`. The module can accept a verified camera later without redesigning the page.
+
 ## Visitor schedule guardrail
 
 The current visitor configuration is explicitly verified for **2026** from Bureau of Reclamation information. The app does not automatically reuse the 2026 tour/laser schedule in future years. A future year falls back to `schedule not verified` until its source data is reviewed.
@@ -127,7 +145,7 @@ node scripts/probe-cwms.mjs
 
 CI runs:
 
-1. deterministic parser/model/schedule/hydraulic tests
+1. deterministic parser/model/schedule/hydraulic/history/engineering tests
 2. production Next.js build
 3. 13-month generation + tailwater-rating validation
 4. live CWMS source-health probe
@@ -137,12 +155,16 @@ The live external-data checks are non-blocking so a federal source outage is not
 ## API
 
 - `/api/status` — normalized current status, telemetry completeness, provenance and visitor intelligence
-- `/api/history?range=24h|7d|30d` — normalized operating history
+- `/api/history?range=24h|7d|30d` — normalized operating history, source age, series metadata and derived observations
+- `/api/visitor` — stable visitor-only payload with tours, Visitor Center, laser show, weather and astronomy
+- `/api/health` — no-store operational health view exposing source freshness, release blockers and generation calibration state
 
-Government requests are server-side and cached. Browsers do not directly hammer federal sources.
+Government requests are server-side and cached where appropriate. Browsers do not directly hammer federal sources.
 
 ## Current release state
 
-The application code, tests and production build are passing. At the latest source check, CWMS was publishing current Grand Coulee forebay and total outflow but not numeric generation-flow, spill or measured tailwater values. The application safely operates in partial-live mode and exposes a validated estimated-head fallback, while withholding MW and a yes/no spill claim until the required numeric telemetry returns.
+The application code, tests and production build are passing on the integrated feature set. At the latest source check, CWMS was publishing current Grand Coulee forebay and total outflow but not numeric generation-flow, spill or measured tailwater values. The application safely operates in partial-live mode and exposes a validated estimated-head fallback, while withholding MW and a yes/no spill claim until the required numeric telemetry returns.
+
+Production promotion remains blocked until current generation-flow and spill telemetry return or equivalent official near-real-time sources are verified, followed by deployed mobile/accessibility/performance QA.
 
 See GitHub issue #1 for the current operational-source release gate.

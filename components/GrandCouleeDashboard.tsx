@@ -192,9 +192,9 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
       </section>
     </header>
 
-    <VisitPlanner status={status} />
-
     <PhotographicDamExplorer status={status} />
+
+    <VisitPlanner status={status} />
 
     <section className="visitor-section">
       <div className="today-card"><span className="eyebrow">TODAY AT GRAND COULEE</span><h2>Today’s schedule</h2><p className="timeline-now">Times shown in Pacific Time</p><ol className="timeline"><li className="highlight"><time>{formatPacific(status.retrievedAt)}</time><span>NOW</span></li>{!holidayClosure && <li><time>8:30 AM</time><span>Visitor Center opens</span></li>}{status.visitor.toursToday.map(time => <li key={time}><time>{time}</time><span>Guided pump-generating plant tour</span></li>)}{!holidayClosure && <li><time>5:00 PM</time><span>Visitor Center closes</span></li>}<li><time>{status.astronomy.sunset}</time><span>Sunset</span></li>{status.visitor.laserStatus === 'tonight' && status.visitor.laserTime && <li className="highlight"><time>{formatPacific(status.visitor.laserTime)}</time><span>One River, Many Voices laser show</span></li>}</ol></div>

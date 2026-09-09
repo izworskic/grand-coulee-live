@@ -1,0 +1,33 @@
+{
+  "name": "grand-coulee-live",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "cheerio": "^1.0.0",
+    "next": "^15.5.2",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "suncalc": "^1.9.0",
+    "three": "^0.179.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@types/suncalc": "^1.9.2",
+    "@types/three": "^0.179.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

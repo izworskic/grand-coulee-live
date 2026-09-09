@@ -69,20 +69,13 @@ function contextTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function shortDate(value: string | null) {
-  if (!value) return '—';
-  const parsed = new Date(`${value}T12:00:00-07:00`);
-  if (!Number.isFinite(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' }).format(parsed);
-}
-
 export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus }) {
-  const [selected, setSelected] = useState<HotspotId>('spillway');
-  const current = HOTSPOTS.find(point => point.id === selected) ?? HOTSPOTS[1];
+  const [selected, setSelected] = useState<HotspotId>('reservoir');
+  const current = HOTSPOTS.find(point => point.id === selected) ?? HOTSPOTS[0];
   const spilling = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
   const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
   const headEstimated = status.hydraulic.headSource === 'rating-curve';
-  const hasRiverContext = [status.riverContext.inflowKcfs, status.riverContext.dailyOutflowKcfs, status.riverContext.dailySpillKcfs].some(value => value !== null);
+  const hasRiverContext = [status.riverContext.inflowKcfs, status.riverContext.dailyOutflowKcfs, status.reservoir.change24hFt].some(value => value !== null);
 
   const choose = (id: HotspotId) => {
     setSelected(id);
@@ -90,16 +83,9 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
   };
 
   const detailValue = (() => {
-    if (selected === 'reservoir') return status.reservoir.forebayFt === null ? '—' : `${n(status.reservoir.forebayFt, 2)} ft`;
-    if (selected === 'spillway') {
-      if (status.flow.spillKcfs !== null) return spilling ? `${n(status.flow.spillKcfs, 2)} kcfs` : 'No spill reported';
-      if (status.riverContext.dailySpillKcfs !== null) {
-        const pct = status.riverContext.dailySpillPercent === null ? '' : ` · ${n(status.riverContext.dailySpillPercent, 1)}% of outflow`;
-        return `${n(status.riverContext.dailySpillKcfs, 2)} kcfs daily avg · ${shortDate(status.riverContext.dailySpillDate)}${pct}`;
-      }
-      return '—';
-    }
-    if (selected === 'pumps') return status.pumping.banksLakePumpKcfs === null ? '—' : `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs`;
+    if (selected === 'reservoir') return status.reservoir.forebayFt === null ? null : `${n(status.reservoir.forebayFt, 2)} ft`;
+    if (selected === 'spillway') return status.flow.spillKcfs === null ? null : spilling ? `${n(status.flow.spillKcfs, 2)} kcfs` : 'No spill reported';
+    if (selected === 'pumps') return status.pumping.banksLakePumpKcfs === null ? null : `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs`;
     if (selected === 'visitor') return status.visitor.visitorCenterStatus.toUpperCase();
     return null;
   })();
@@ -113,8 +99,8 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
         </div>
       </div>
 
-      {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee daily river context">
-        <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
+      {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee river context">
+        <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS</small></div>
         <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
         <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
         <div><span>Lake change</span><strong>{status.reservoir.change24hFt === null ? '—' : `${status.reservoir.change24hFt > 0 ? '↑' : status.reservoir.change24hFt < 0 ? '↓' : '→'} ${Math.abs(status.reservoir.change24hFt).toFixed(2)} ft`}</strong><small>past 24 hours</small></div>
@@ -168,7 +154,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
           <div className="detail-index">{String(HOTSPOTS.findIndex(point => point.id === selected) + 1).padStart(2, '0')}</div>
           <h3>{current.label}</h3>
           <p>{current.body}</p>
-          {detailValue && <div className="photo-detail-live"><span>{selected === 'spillway' && status.flow.spillKcfs === null && status.riverContext.dailySpillKcfs !== null ? 'DAILY' : 'NOW'}</span><strong>{detailValue}</strong></div>}
+          {detailValue && <div className="photo-detail-live"><span>NOW</span><strong>{detailValue}</strong></div>}
           <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />
         </aside>
       </div>

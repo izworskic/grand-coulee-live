@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { InterpretiveDepth } from '@/components/InterpretiveDepth';
 
 type HistoryRange = '24h' | '7d' | '30d';
 type SeriesMeta = { key: string; label: string; unit: string };
@@ -114,46 +115,49 @@ export function OperationsHistory() {
     window.gtag?.('event', 'history_series_change', { range, series: key });
   };
 
-  return <section className="history-section" aria-labelledby="history-heading">
-    <div className="history-heading-row">
-      <div><span className="eyebrow">OPERATIONS HISTORY</span><h2 id="history-heading">What changed?</h2></div>
-      <div className="range-controls" role="group" aria-label="History range">
-        {(Object.keys(RANGE_LABELS) as HistoryRange[]).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => chooseRange(value)} aria-pressed={range === value}>{RANGE_LABELS[value]}</button>)}
-      </div>
-    </div>
-
-    <div className="history-shell">
-      <div className="history-meta">
-        <div><strong>{payload?.windowLabel || 'Loading operating history…'}</strong>{payload?.through && <span>Through {shortDate(payload.through)} Pacific</span>}</div>
-        {payload && <span className={age.stale ? 'history-age stale' : 'history-age'}>{age.label}</span>}
-      </div>
-
-      {payload?.series.length ? <div className="series-controls" role="group" aria-label="History metric">
-        {payload.series.map(series => <button key={series.key} className={selectedKey === series.key ? 'active' : ''} onClick={() => chooseSeries(series.key)} aria-pressed={selectedKey === series.key}>{series.label}</button>)}
-      </div> : null}
-
-      <div className="chart-card">
-        {loading ? <p className="muted">Loading operating history…</p> : payload?.error ? <p className="muted">{payload.error}</p> : chart && selectedSeries ? <>
-          <div className="chart-summary"><div><span>{selectedSeries.label}</span><strong>{chart.latest.toLocaleString(undefined, { maximumFractionDigits: selectedSeries.unit === 'ft' ? 2 : 1 })} {selectedSeries.unit}</strong></div><div><span>Range</span><strong>{chart.min.toLocaleString(undefined, { maximumFractionDigits: 2 })}–{chart.max.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div></div>
-          <svg viewBox="0 0 800 220" role="img" aria-labelledby="history-chart-title history-chart-desc">
-            <title id="history-chart-title">{selectedSeries.label} over {RANGE_LABELS[range]}</title>
-            <desc id="history-chart-desc">A line chart using the latest available {payload?.basis} observations through {shortDate(payload?.through ?? null)}. Minimum {chart.min.toFixed(2)} and maximum {chart.max.toFixed(2)} {selectedSeries.unit}.</desc>
-            <line x1="34" y1="184" x2="766" y2="184" className="chart-axis" />
-            <line x1="34" y1="52" x2="766" y2="52" className="chart-grid" />
-            <path d={chart.path} className="chart-line" />
-          </svg>
-        </> : <p className="muted">Not enough numeric observations are available for this metric and range.</p>}
-        <p className="chart-note">History is anchored to the latest available source observation. If a federal daily feed is delayed, the date above makes that delay explicit instead of implying the chart reaches today.</p>
-      </div>
-
-      <div className="insight-block" aria-live="polite">
-        <div className="insight-heading"><span className="eyebrow">DERIVED OBSERVATIONS</span><p>These statements describe changes visible in the data. They do not infer why operators made them.</p></div>
-        <div className="insight-grid">
-          {payload?.insights.length ? payload.insights.map(insight => <article key={insight.id}><span>{insight.label}</span><p>{insight.text}</p></article>) : <article><span>DERIVED</span><p>No material change can be stated confidently from the available observations in this range.</p></article>}
+  return <>
+    <section className="history-section" aria-labelledby="history-heading">
+      <div className="history-heading-row">
+        <div><span className="eyebrow">OPERATIONS HISTORY</span><h2 id="history-heading">What changed?</h2></div>
+        <div className="range-controls" role="group" aria-label="History range">
+          {(Object.keys(RANGE_LABELS) as HistoryRange[]).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => chooseRange(value)} aria-pressed={range === value}>{RANGE_LABELS[value]}</button>)}
         </div>
       </div>
-    </div>
-  </section>;
+
+      <div className="history-shell">
+        <div className="history-meta">
+          <div><strong>{payload?.windowLabel || 'Loading operating history…'}</strong>{payload?.through && <span>Through {shortDate(payload.through)} Pacific</span>}</div>
+          {payload && <span className={age.stale ? 'history-age stale' : 'history-age'}>{age.label}</span>}
+        </div>
+
+        {payload?.series.length ? <div className="series-controls" role="group" aria-label="History metric">
+          {payload.series.map(series => <button key={series.key} className={selectedKey === series.key ? 'active' : ''} onClick={() => chooseSeries(series.key)} aria-pressed={selectedKey === series.key}>{series.label}</button>)}
+        </div> : null}
+
+        <div className="chart-card">
+          {loading ? <p className="muted">Loading operating history…</p> : payload?.error ? <p className="muted">{payload.error}</p> : chart && selectedSeries ? <>
+            <div className="chart-summary"><div><span>{selectedSeries.label}</span><strong>{chart.latest.toLocaleString(undefined, { maximumFractionDigits: selectedSeries.unit === 'ft' ? 2 : 1 })} {selectedSeries.unit}</strong></div><div><span>Range</span><strong>{chart.min.toLocaleString(undefined, { maximumFractionDigits: 2 })}–{chart.max.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div></div>
+            <svg viewBox="0 0 800 220" role="img" aria-labelledby="history-chart-title history-chart-desc">
+              <title id="history-chart-title">{selectedSeries.label} over {RANGE_LABELS[range]}</title>
+              <desc id="history-chart-desc">A line chart using the latest available {payload?.basis} observations through {shortDate(payload?.through ?? null)}. Minimum {chart.min.toFixed(2)} and maximum {chart.max.toFixed(2)} {selectedSeries.unit}.</desc>
+              <line x1="34" y1="184" x2="766" y2="184" className="chart-axis" />
+              <line x1="34" y1="52" x2="766" y2="52" className="chart-grid" />
+              <path d={chart.path} className="chart-line" />
+            </svg>
+          </> : <p className="muted">Not enough numeric observations are available for this metric and range.</p>}
+          <p className="chart-note">History is anchored to the latest available source observation. If a federal daily feed is delayed, the date above makes that delay explicit instead of implying the chart reaches today.</p>
+        </div>
+
+        <div className="insight-block" aria-live="polite">
+          <div className="insight-heading"><span className="eyebrow">DERIVED OBSERVATIONS</span><p>These statements describe changes visible in the data. They do not infer why operators made them.</p></div>
+          <div className="insight-grid">
+            {payload?.insights.length ? payload.insights.map(insight => <article key={insight.id}><span>{insight.label}</span><p>{insight.text}</p></article>) : <article><span>DERIVED</span><p>No material change can be stated confidently from the available observations in this range.</p></article>}
+          </div>
+        </div>
+      </div>
+    </section>
+    <InterpretiveDepth />
+  </>;
 }
 
 declare global { interface Window { gtag?: (...args: unknown[]) => void } }

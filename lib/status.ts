@@ -96,13 +96,13 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const sources: SourceProvenance[] = [
     {
       id: 'usace-hourly',
-      label: 'USACE CROHMS · Grand Coulee hourly',
+      label: 'USACE CWMS Data API · Grand Coulee operations',
       url: USACE_HOURLY_URL,
       kind: 'measured',
       observedAt,
       retrievedAt,
       freshness: hourlyResult.status === 'fulfilled' ? currentFreshness : 'unavailable',
-      note: 'Total outflow, turbine flow, spill, forebay, tailwater and hydraulic head.'
+      note: 'CWMS API is primary for total outflow, generation flow, spill, forebay and tailwater; the legacy CROHMS hourly report remains a freshness-ranked fallback. Hydraulic head is calculated from forebay minus tailwater.'
     },
     {
       id: 'usace-daily',

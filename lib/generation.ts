@@ -34,7 +34,7 @@ export function buildCalibration(days: DailyObservation[]) {
     .filter((item): item is { day: DailyObservation; efficiency: number } => item.efficiency !== null)
     .slice(-14);
 
-  if (!samples.length) return { efficiency: null, days: 0, dispersion: null, confidence: 'low' as Confidence };
+  if (!samples.length) return { efficiency: null, days: 0, dispersion: null, confidence: 'low' as Confidence, latestDate: null as string | null };
   const efficiency = median(samples.map(sample => sample.efficiency));
   const deviations = samples.map(sample => Math.abs(sample.efficiency - efficiency));
   const mad = median(deviations);
@@ -42,7 +42,7 @@ export function buildCalibration(days: DailyObservation[]) {
   let confidence: Confidence = 'low';
   if (samples.length >= 7 && (dispersion ?? 1) <= 0.04) confidence = 'high';
   else if (samples.length >= 4 && (dispersion ?? 1) <= 0.08) confidence = 'medium';
-  return { efficiency, days: samples.length, dispersion, confidence };
+  return { efficiency, days: samples.length, dispersion, confidence, latestDate: samples.at(-1)?.day.date ?? null };
 }
 
 export function estimateGenerationMW(flowKcfs: number | null, headFt: number | null, efficiency: number | null): number | null {

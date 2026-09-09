@@ -102,6 +102,12 @@ export interface GrandCouleeStatus {
     generationFlowKcfs: number | null;
     spillKcfs: number | null;
   };
+  riverContext: {
+    observedAt: string | null;
+    inflowKcfs: number | null;
+    dailyOutflowKcfs: number | null;
+    precipitationIn: number | null;
+  };
   hydraulic: {
     tailwaterFt: number | null;
     headFt: number | null;

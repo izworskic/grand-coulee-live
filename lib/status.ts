@@ -4,7 +4,7 @@ import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOU
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
 import { getWeather } from '@/lib/data/weather';
 import { buildCalibration, estimateGenerationMW, INSTALLED_CAPACITY_MW } from '@/lib/generation';
-import type { Freshness, GrandCouleeStatus, HourlyObservation, SourceProvenance } from '@/lib/types';
+import type { Confidence, Freshness, GrandCouleeStatus, HourlyObservation, SourceProvenance } from '@/lib/types';
 
 const FULL_POOL_FT = 1290;
 const NWS_SOURCE = 'https://api.weather.gov/points/47.955,-118.9833';
@@ -15,6 +15,22 @@ function freshness(observedAt: string | null): Freshness {
   if (ageHours < 2) return 'current';
   if (ageHours < 6) return 'delayed';
   return 'stale';
+}
+
+function dailyFreshness(date: string | null, now: DateTime): Freshness {
+  if (!date) return 'unavailable';
+  const observed = DateTime.fromISO(date, { zone: ZONE }).endOf('day');
+  if (!observed.isValid) return 'unavailable';
+  const ageDays = now.diff(observed, 'days').days;
+  if (ageDays <= 2) return 'current';
+  if (ageDays <= 7) return 'delayed';
+  return 'stale';
+}
+
+function estimateConfidence(base: Confidence, hourly: Freshness, calibration: Freshness): Confidence {
+  if (hourly === 'stale' || hourly === 'unavailable' || calibration === 'stale' || calibration === 'unavailable') return 'low';
+  if (hourly === 'delayed' || calibration === 'delayed') return base === 'low' ? 'low' : 'medium';
+  return base;
 }
 
 function valueAtOrBefore(rows: HourlyObservation[], targetMs: number): HourlyObservation | null {
@@ -46,7 +62,7 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
   }
   return {
     headline: 'OUTDOOR VIEWING AVAILABLE',
-    detail: `The Visitor Center is closed right now. Current operations and daylight conditions are still shown for planning an exterior visit.`
+    detail: 'The Visitor Center is closed right now. Current operations and daylight conditions are still shown for planning an exterior visit.'
   };
 }
 
@@ -71,8 +87,11 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const generationMW = estimateGenerationMW(latest?.generationFlowKcfs ?? null, latest?.headFt ?? null, calibration.efficiency);
   const observedAt = latest?.observedAt ?? null;
   const currentFreshness = freshness(observedAt);
+  const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
+  const calibrationFreshness = dailyFreshness(calibration.latestDate, now);
   const astronomy = getAstronomy(now);
   const visitor = getVisitorStatus(now, reclamationHealthy);
+  const pumpingUsable = dailySourceFreshness === 'current' || dailySourceFreshness === 'delayed';
 
   const sources: SourceProvenance[] = [
     {
@@ -92,8 +111,8 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       kind: 'reported',
       observedAt: latestDaily?.date ?? null,
       retrievedAt,
-      freshness: dailyResult.status === 'fulfilled' ? 'current' : 'unavailable',
-      note: 'Reported daily generation and Banks Lake pumping data used for calibration and context.'
+      freshness: dailySourceFreshness,
+      note: 'Reported daily generation and Banks Lake pumping data used for calibration and context. Freshness is based on the newest observation date, not HTTP retrieval success.'
     },
     {
       id: 'reclamation-visitor',
@@ -154,17 +173,18 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
     },
     generation: {
       currentEstimatedMW: generationMW,
-      estimateConfidence: calibration.efficiency === null ? null : currentFreshness === 'current' ? calibration.confidence : currentFreshness === 'delayed' ? 'medium' : 'low',
+      estimateConfidence: calibration.efficiency === null ? null : estimateConfidence(calibration.confidence, currentFreshness, calibrationFreshness),
       calibrationEfficiency: calibration.efficiency,
       calibrationDays: calibration.days,
+      calibrationLatestDate: calibration.latestDate,
       latestReportedAverageMW: latestReported?.averageGenerationMW ?? null,
       latestReportedDate: latestReported?.date ?? null,
       installedCapacityMW: INSTALLED_CAPACITY_MW
     },
     pumping: {
-      banksLakePumpKcfs: latestDaily?.banksLakePumpKcfs ?? null,
-      pumpMWh: latestDaily?.banksLakePumpMWh ?? null,
-      banksLakeElevationFt: latestDaily?.banksLakeElevationFt ?? null
+      banksLakePumpKcfs: pumpingUsable ? latestDaily?.banksLakePumpKcfs ?? null : null,
+      pumpMWh: pumpingUsable ? latestDaily?.banksLakePumpMWh ?? null : null,
+      banksLakeElevationFt: pumpingUsable ? latestDaily?.banksLakeElevationFt ?? null : null
     },
     visitor,
     weather,

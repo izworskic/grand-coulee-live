@@ -75,6 +75,12 @@ export interface GrandCouleeStatus {
   observedAt: string | null;
   retrievedAt: string;
   freshness: Freshness;
+  telemetry: {
+    state: 'complete' | 'partial' | 'unavailable';
+    availableCoreSeries: number;
+    totalCoreSeries: number;
+    missingCoreSeries: string[];
+  };
   reservoir: {
     forebayFt: number | null;
     fullPoolFt: number;

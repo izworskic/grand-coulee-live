@@ -1,0 +1,155 @@
+'use client';
+
+import { useState } from 'react';
+import { EngineeringFacts } from '@/components/EngineeringFacts';
+import type { GrandCouleeStatus } from '@/lib/types';
+
+type HotspotId = 'reservoir' | 'spillway' | 'left' | 'right' | 'third' | 'pumps' | 'visitor' | 'viewpoints';
+
+type Hotspot = {
+  id: HotspotId;
+  label: string;
+  short: string;
+  x: number;
+  y: number;
+  body: string;
+};
+
+const PHOTO_URL = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.jpg';
+const PHOTO_SOURCE = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.html';
+
+const HOTSPOTS: Hotspot[] = [
+  {
+    id: 'reservoir', label: 'Lake Roosevelt', short: 'Lake Roosevelt', x: 17, y: 47,
+    body: 'Franklin D. Roosevelt Lake is the reservoir upstream of Grand Coulee. The live waterline is reported separately from this reference photograph.'
+  },
+  {
+    id: 'spillway', label: 'Main spillway', short: 'Spillway', x: 48, y: 61,
+    body: 'The central spillway passes water over the dam when operators release water outside the generating units. The live tool only marks spill active when USACE publishes a numeric spill observation.'
+  },
+  {
+    id: 'left', label: 'Left Powerhouse', short: 'Left powerhouse', x: 35, y: 66,
+    body: 'The Left Powerhouse is one of the two original powerhouse blocks flanking the spillway. Reclamation lists nine 125 MW main generators plus three 10 MW station-service generators.'
+  },
+  {
+    id: 'right', label: 'Right Powerhouse', short: 'Right powerhouse', x: 58, y: 64,
+    body: 'The Right Powerhouse is the other original powerhouse block. Reclamation lists nine 125 MW generators here.'
+  },
+  {
+    id: 'third', label: 'Nathaniel “Nat” Washington Power Plant', short: 'Third Power Plant', x: 63, y: 50,
+    body: 'The Third Power Plant expanded Grand Coulee with six very large generating units and is the largest single powerhouse at the complex.'
+  },
+  {
+    id: 'pumps', label: 'John W. Keys III Pump-Generating Plant', short: 'Pump plant', x: 57, y: 37,
+    body: 'The pump-generating plant lifts Columbia River water toward Banks Lake for the Columbia Basin Project. Six of its twelve pumping units are reversible pump-generators.'
+  },
+  {
+    id: 'visitor', label: 'Grand Coulee Visitor Center', short: 'Visitor center', x: 65, y: 76,
+    body: 'The visitor center sits below the dam and serves as the public hub for exhibits, visitor information, seasonal tours and the evening laser show.'
+  },
+  {
+    id: 'viewpoints', label: 'Public viewing area', short: 'Viewpoints', x: 73, y: 72,
+    body: 'Public viewing areas around the visitor complex provide the safest way to see the dam. This tool does not identify restricted operational areas as visitor destinations.'
+  }
+];
+
+function n(value: number | null, digits = 1) {
+  return value === null || !Number.isFinite(value) ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus }) {
+  const [selected, setSelected] = useState<HotspotId>('spillway');
+  const [flowMode, setFlowMode] = useState(true);
+  const [engineering, setEngineering] = useState(false);
+  const current = HOTSPOTS.find(point => point.id === selected) ?? HOTSPOTS[1];
+  const spilling = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
+  const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
+  const headEstimated = status.hydraulic.headSource === 'rating-curve';
+
+  const choose = (id: HotspotId) => {
+    setSelected(id);
+    window.gtag?.('event', 'dam_hotspot_click', { hotspot: id, visual: 'photo' });
+  };
+
+  const detailValue = (() => {
+    if (selected === 'reservoir') return status.reservoir.forebayFt === null ? 'Live level unavailable' : `${n(status.reservoir.forebayFt, 2)} ft measured`;
+    if (selected === 'spillway') return status.flow.spillKcfs === null ? 'Spill status unavailable' : spilling ? `${n(status.flow.spillKcfs, 2)} kcfs spilling` : 'No meaningful spill reported';
+    if (selected === 'pumps') return status.pumping.banksLakePumpKcfs === null ? 'Pumping flow unavailable' : `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs pumping`;
+    if (selected === 'visitor') return status.visitor.visitorCenterStatus.toUpperCase();
+    return null;
+  })();
+
+  return (
+    <section className="photo-dam-section" aria-labelledby="photo-dam-heading">
+      <div className="section-heading-row photo-dam-heading-row">
+        <div>
+          <span className="eyebrow">INTERACTIVE GRAND COULEE</span>
+          <h2 id="photo-dam-heading">Explore the real dam</h2>
+          <p className="photo-dam-intro">A Bureau of Reclamation aerial photograph replaces the old schematic. Tap the marked structures to understand what they do; live operating data stays separate from the historical reference image.</p>
+        </div>
+        <div className="mode-controls" role="group" aria-label="Dam photo display modes">
+          <button className={flowMode ? 'active' : ''} onClick={() => setFlowMode(v => !v)} aria-pressed={flowMode}>Flow overlay</button>
+          <button className={engineering ? 'active' : ''} onClick={() => setEngineering(v => !v)} aria-pressed={engineering}>Engineering</button>
+        </div>
+      </div>
+
+      <div className="photo-dam-grid">
+        <div className="dam-photo-card">
+          <div className="dam-photo-stage">
+            <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River from the Bureau of Reclamation, June 30, 2011" loading="lazy" />
+            <div className="dam-photo-vignette" aria-hidden="true" />
+
+            {flowMode && (
+              <svg className="dam-photo-flow" viewBox="0 0 1000 664" aria-hidden="true" preserveAspectRatio="none">
+                {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M380 405 C395 470 420 500 470 538" />}
+                {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M585 400 C575 455 570 500 540 540" />}
+                {spilling && <path className="photo-flow spill" d="M495 385 C500 450 505 500 515 540" />}
+                {status.pumping.banksLakePumpKcfs !== null && <path className="photo-flow pump" d="M575 355 C610 315 655 285 705 255" />}
+              </svg>
+            )}
+
+            {HOTSPOTS.map((point, index) => (
+              <button
+                key={point.id}
+                className={`dam-photo-pin ${selected === point.id ? 'selected' : ''}`}
+                style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                onClick={() => choose(point.id)}
+                aria-label={`Explore ${point.label}`}
+                aria-pressed={selected === point.id}
+              >
+                <span className="pin-number">{index + 1}</span>
+                <span className="pin-label">{point.short}</span>
+              </button>
+            ))}
+
+            <div className="dam-photo-live-badge lake"><span>LAKE</span><strong>{status.reservoir.forebayFt === null ? '—' : `${n(status.reservoir.forebayFt, 2)} ft`}</strong></div>
+            <div className="dam-photo-live-badge river"><span>OUTFLOW</span><strong>{status.flow.totalOutflowKcfs === null ? '—' : `${n(status.flow.totalOutflowKcfs, 1)} kcfs`}</strong></div>
+          </div>
+          <div className="dam-photo-caption">
+            <span><strong>Official reference photograph.</strong> June 30, 2011; not a live camera. Flow overlays are explanatory and not to scale.</span>
+            <a href={PHOTO_SOURCE} target="_blank" rel="noreferrer">Bureau of Reclamation source ↗</a>
+          </div>
+        </div>
+
+        <aside className="photo-dam-detail" aria-live="polite">
+          <span className="eyebrow">SELECTED STRUCTURE</span>
+          <div className="detail-index">{String(HOTSPOTS.findIndex(point => point.id === selected) + 1).padStart(2, '0')}</div>
+          <h3>{current.label}</h3>
+          <p>{current.body}</p>
+          {detailValue && <div className="photo-detail-live"><span>LIVE CONTEXT</span><strong>{detailValue}</strong></div>}
+          {engineering && <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />}
+        </aside>
+      </div>
+
+      <div className="photo-dam-key" aria-label="Dam structure key">
+        {HOTSPOTS.map((point, index) => (
+          <button key={point.id} className={selected === point.id ? 'selected' : ''} onClick={() => choose(point.id)}>
+            <span>{index + 1}</span>{point.short}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+declare global { interface Window { gtag?: (...args: unknown[]) => void } }

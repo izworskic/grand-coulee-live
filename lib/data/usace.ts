@@ -19,6 +19,11 @@ function num(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function bounded(value: string, min: number, max: number): number | null {
+  const parsed = num(value);
+  return parsed !== null && parsed >= min && parsed <= max ? parsed : null;
+}
+
 function cells($: cheerio.CheerioAPI, row: unknown): string[] {
   return $(row as never)
     .find('td')
@@ -41,12 +46,12 @@ export function parseHourlyHtml(html: string): HourlyObservation[] {
     const observation: HourlyObservation = {
       hour,
       observedAt: base.startOf('day').plus({ hours: hour }).toISO() ?? '',
-      totalOutflowKcfs: num(c[1]),
-      generationFlowKcfs: num(c[2]),
-      spillKcfs: num(c[3]),
-      forebayFt: num(c[4]),
-      tailwaterFt: num(c[5]),
-      headFt: num(c[6])
+      totalOutflowKcfs: bounded(c[1], 0, 2000),
+      generationFlowKcfs: bounded(c[2], 0, 500),
+      spillKcfs: bounded(c[3], 0, 1100),
+      forebayFt: bounded(c[4], 1000, 1350),
+      tailwaterFt: bounded(c[5], 800, 1100),
+      headFt: bounded(c[6], 0, 500)
     };
     if ([observation.totalOutflowKcfs, observation.forebayFt, observation.headFt].some(v => v !== null)) rows.push(observation);
   });
@@ -69,20 +74,20 @@ export function parseDailyHtml(html: string): DailyObservation[] {
     if (!date.isValid) return;
     const observation: DailyObservation = {
       date: date.toISODate() ?? '',
-      generationMWh: num(c[1]),
-      averageGenerationMW: num(c[2]),
-      stationUseMWh: num(c[3]),
-      inflowKcfs: num(c[4]),
-      totalOutflowKcfs: num(c[5]),
-      generationFlowKcfs: num(c[6]),
-      spillKcfs: num(c[7]),
-      reservoirElevationFt: num(c[8]),
-      forebayFt: num(c[9]),
-      tailwaterFt: num(c[10]),
-      headFt: num(c[11]),
-      banksLakePumpKcfs: num(c[12]),
-      banksLakePumpMWh: num(c[13]),
-      banksLakeElevationFt: num(c[14])
+      generationMWh: bounded(c[1], 0, 200000),
+      averageGenerationMW: bounded(c[2], 0, 7000),
+      stationUseMWh: bounded(c[3], 0, 20000),
+      inflowKcfs: bounded(c[4], 0, 2000),
+      totalOutflowKcfs: bounded(c[5], 0, 2000),
+      generationFlowKcfs: bounded(c[6], 0, 500),
+      spillKcfs: bounded(c[7], 0, 1100),
+      reservoirElevationFt: bounded(c[8], 1000, 1350),
+      forebayFt: bounded(c[9], 1000, 1350),
+      tailwaterFt: bounded(c[10], 800, 1100),
+      headFt: bounded(c[11], 0, 500),
+      banksLakePumpKcfs: bounded(c[12], 0, 200),
+      banksLakePumpMWh: bounded(c[13], 0, 100000),
+      banksLakeElevationFt: bounded(c[14], 1400, 1700)
     };
     if (Object.values(observation).some((v, i) => i > 0 && typeof v === 'number')) rows.push(observation);
   });
@@ -133,7 +138,6 @@ async function getHourlyObservationsFresh(): Promise<HourlyObservation[]> {
 }
 
 async function getDailyObservationsFresh(): Promise<DailyObservation[]> {
-  // Pull a wider rolling archive so generation calibration/backtesting is not limited to one month.
   const urls = Array.from({ length: 13 }, (_, ago) => `${LEGACY_DAILY_BASE}?ago=${ago}&r=gcl`);
   const settled = await Promise.allSettled(urls.map(fetchText));
   const rows = settled.flatMap(result => result.status === 'fulfilled' ? parseDailyHtml(result.value) : []);
@@ -142,20 +146,15 @@ async function getDailyObservationsFresh(): Promise<DailyObservation[]> {
   return [...deduped.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// Cache normalized/validated results as well as the underlying HTTP responses. If a
-// federal page redesign or transient upstream failure makes a refresh throw, Next's
-// time-based Data Cache continues serving the last successfully generated value.
-// The observation timestamps are preserved, so the UI will mark that retained value
-// delayed/stale rather than misrepresenting it as current.
 const getCachedHourlyObservations = unstable_cache(
   getHourlyObservationsFresh,
-  ['grand-coulee-normalized-hourly-v2'],
+  ['grand-coulee-normalized-hourly-v3'],
   { revalidate: 600, tags: ['grand-coulee-hourly'] }
 );
 
 const getCachedDailyObservations = unstable_cache(
   getDailyObservationsFresh,
-  ['grand-coulee-normalized-daily-v2'],
+  ['grand-coulee-normalized-daily-v3'],
   { revalidate: 1800, tags: ['grand-coulee-daily'] }
 );
 

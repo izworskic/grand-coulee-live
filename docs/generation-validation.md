@@ -1,52 +1,95 @@
 # Generation-estimator validation
 
-Validation status: **preliminary; production release gate remains open**
+Validation status: **model benchmark passed; real-time input gate remains source-dependent**
+
+Last validated: 2026-09-08/09
 
 ## Model
 
-Grand Coulee Live estimates instantaneous plant generation from reported turbine flow and hydraulic head:
+Grand Coulee Live estimates plant generation from generation/turbine flow and hydraulic head:
 
 `P = rho × g × Q × H × eta`
 
-The product never labels this as an official instantaneous plant MW reading.
+The product never labels this as an official instantaneous plant MW reading. If current turbine-flow telemetry is absent, current estimated MW is withheld.
 
-## Initial official-data backtest
+## Calibration method
 
-A first out-of-sample test was run against the complete reported-generation portion of the USACE Grand Coulee July 2026 daily table. Days 1–21 have reported average generation, generation flow and average head. Each tested day uses only prior days to estimate efficiency.
+The shipped estimator uses a rolling **14-observation median inferred efficiency**. For every evaluation day, the target day is excluded from calibration; only prior complete observations are used.
 
-Because only 21 complete daily generation rows are currently exposed by the public table, this is an initial validation window rather than the broader historical sample required for final release.
+This was selected for robustness rather than fitting a single favorable month.
 
-### Candidate results
+## 13-month official-data backtest
 
-Backtest targets: July 8–21, 2026 (`n = 14`).
+Source: USACE Grand Coulee daily reports.
 
-| Calibration | MAE MW | MAPE | Median absolute error MW | Bias MW |
-| --- | ---: | ---: | ---: | ---: |
-| 7-day mean efficiency | 21.3 | 0.89% | 17.1 | +10.1 |
-| 7-day median efficiency | 26.5 | 1.10% | 21.5 | +16.3 |
-| 14-day median efficiency | 27.2 | 1.13% | 24.3 | +24.0 |
-| Fixed 90% efficiency | 27.8 | 1.19% | 20.6 | +26.8 |
-| All-prior median efficiency | 29.4 | 1.23% | 27.2 | +26.7 |
+- months requested: **13**
+- failed source months: **0**
+- source rows: **368**
+- complete model rows: **360**
+- out-of-sample evaluation days: **346**
+- evaluation window: **September 15, 2025 through August 27, 2026**
 
-A 7-day trimmed mean (remove the highest and lowest inferred efficiency before averaging) produced MAE 23.0 MW and MAPE 0.96% in the same short window.
+Operating ranges represented:
 
-## Interpretation
+- generation flow: **42.9–170.9 kcfs**
+- hydraulic head: **285.4–330.8 ft**
+- forebay: **1,251.2–1,289.2 ft**
 
-The physics approach is promising in this initial sample: all rolling candidates tested near roughly one-percent MAPE. The 7-day mean has the lowest error in this short window, while the median/trimmed estimators offer better resistance to anomalous operating days.
+## Overall results
 
-The shipped code currently favors a robust rolling median rather than optimizing to one short July window. That choice should be revisited after a larger multi-regime sample is available.
+| Metric | Result |
+| --- | ---: |
+| Evaluation days | 346 |
+| MAE | **25.4 MW** |
+| MAPE | **1.13%** |
+| Bias | **+7.2 MW** |
+| Median absolute error | **16.5 MW** |
 
-## Why this is not yet the final release backtest
+The product release benchmark is overall MAPE ≤8%. The current model clears that target by a wide margin.
 
-The master release gate calls for a meaningful historical sample and error by operating regime. The current official daily publication is incomplete/stale as of September 8, 2026, limiting the immediately accessible verified sample.
+## Error by generation-flow regime
 
-Before production release of the estimated-MW hero, rerun `npm run backtest` when the official daily source exposes a broader set of complete records, then document:
+| Regime | Flow range | n | MAE MW | MAPE | Bias MW | Median abs. error MW |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Low | 42.9–93.6 kcfs | 116 | 26.1 | **1.53%** | +7.2 | 17.6 |
+| Medium | 94.1–121.4 kcfs | 116 | 29.3 | **1.20%** | +16.7 | 18.7 |
+| High | 121.9–170.9 kcfs | 114 | 20.7 | **0.65%** | -2.4 | 15.2 |
 
-- MAE
-- MAPE
-- median absolute error
-- bias
-- error by low/medium/high generation regime
-- fixed vs 7-day vs 14-day vs robust calibration methods
+The model does not show a large degradation at the low- or high-flow ends represented in the sample.
 
-Until then, the application code is build-valid but the estimated-generation release gate is intentionally not marked complete.
+## Tailwater/head fallback validation
+
+USACE's 2022 Grand Coulee Water Control Manual Plate 7-5 publishes a project tailwater rating curve. Grand Coulee Live uses this only as an explicit fallback when measured tailwater is unavailable.
+
+Validation against **367 historical daily observations** across **38.3–170.9 kcfs total outflow**:
+
+| Metric | Tailwater | Head |
+| --- | ---: | ---: |
+| MAE | **0.31 ft** | **0.31 ft** |
+| Bias | -0.06 ft | +0.06 ft |
+| Median absolute error | 0.23 ft | 0.23 ft |
+| P90 absolute error | 0.67 ft | 0.67 ft |
+| P95 absolute error | 0.85 ft | 0.85 ft |
+| Maximum absolute error | 2.04 ft | 2.04 ft |
+
+The fallback is still labeled estimated because the Water Control Manual cautions that Rufus Woods Lake backwater can affect actual project tailwater. Historical agreement is evidence of usefulness, not permission to relabel it as measured telemetry.
+
+## Current real-time limitation
+
+The generation model itself is no longer the release blocker. At the latest CWMS source probe, current total outflow and forebay were publishing, but current generation/turbine flow was not.
+
+Therefore:
+
+- model benchmark: **PASS**
+- hydraulic fallback validation: **PASS**
+- current MW display: **WITHHELD until current turbine-flow telemetry is numeric**
+
+This distinction is deliberate: historical predictive accuracy does not compensate for a missing real-time input.
+
+## Reproduce
+
+```bash
+npm run backtest
+```
+
+The backtest fails the release validation if overall generation MAPE exceeds 8%.

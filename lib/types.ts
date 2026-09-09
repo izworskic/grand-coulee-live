@@ -106,10 +106,6 @@ export interface GrandCouleeStatus {
     observedAt: string | null;
     inflowKcfs: number | null;
     dailyOutflowKcfs: number | null;
-    precipitationIn: number | null;
-    dailySpillDate: string | null;
-    dailySpillKcfs: number | null;
-    dailySpillPercent: number | null;
   };
   hydraulic: {
     tailwaterFt: number | null;

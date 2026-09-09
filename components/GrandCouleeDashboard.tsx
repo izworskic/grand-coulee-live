@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CurrentConditions } from '@/components/CurrentConditions';
+import { EngineeringFacts } from '@/components/EngineeringFacts';
 import { OperationsHistory } from '@/components/OperationsHistory';
 import type { GrandCouleeStatus } from '@/lib/types';
 
@@ -11,10 +12,10 @@ type HotspotId = 'reservoir' | 'spillway' | 'left' | 'right' | 'third' | 'pumps'
 const detailCopy: Record<HotspotId, { title: string; body: string }> = {
   reservoir: { title: 'Lake Roosevelt', body: 'Franklin D. Roosevelt Lake stores Columbia River water upstream of the dam. Its elevation changes with flood-risk management, power, irrigation and other operating requirements.' },
   spillway: { title: 'Spillway', body: 'The central spillway passes water that is not routed through generating units. The animation here responds only to a numeric USACE spill observation and never assumes missing spill telemetry means zero.' },
-  left: { title: 'Left Powerhouse', body: 'One of the original powerhouse areas. Water drops through penstocks and spins turbine-generator units before returning to the Columbia River.' },
-  right: { title: 'Right Powerhouse', body: 'The other original powerhouse area, part of the immense generating complex built into and beside the dam.' },
-  third: { title: 'Nathaniel “Nat” Washington Power Plant', body: 'The Third Power Plant dramatically expanded Grand Coulee’s generating capability and contains the project’s largest generating units.' },
-  pumps: { title: 'John W. Keys III Pump-Generating Plant', body: 'This reversible plant lifts Columbia River water toward Banks Lake for the Columbia Basin Project and can also generate under appropriate operating conditions.' },
+  left: { title: 'Left Powerhouse', body: 'One of the original powerhouse areas. Reclamation lists nine main generating units here plus three smaller station-service generators.' },
+  right: { title: 'Right Powerhouse', body: 'The other original powerhouse contains nine main generating units and returns turbine flow to the Columbia below the dam.' },
+  third: { title: 'Nathaniel “Nat” Washington Power Plant', body: 'The Third Power Plant dramatically expanded Grand Coulee’s generating capability with six large generating units.' },
+  pumps: { title: 'John W. Keys III Pump-Generating Plant', body: 'This reversible plant lifts Columbia River water toward Banks Lake for the Columbia Basin Project. Reclamation lists six pumps and six pump-generators.' },
   visitor: { title: 'Visitor Center', body: 'The official visitor center is below the dam on State Route 155. It provides exhibits, visitor information and access to the seasonal visitor program.' },
   viewpoints: { title: 'Public viewpoints', body: 'Use official public areas below the dam and around the visitor complex. The tool does not map restricted access points or represent closed areas as public attractions.' }
 };
@@ -96,7 +97,7 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
       <div className="dam-canvas-wrap">
         <svg className="dam-canvas" viewBox="0 0 1000 560" role="img" aria-labelledby="dam-title dam-desc">
           <title id="dam-title">Interactive representation of Grand Coulee Dam</title>
-          <desc id="dam-desc">An educational isometric-style diagram showing Lake Roosevelt, the central spillway, powerhouse areas, pump-generating plant, visitor center and Columbia River. Clickable controls follow the diagram.</desc>
+          <desc id="dam-desc">Educational isometric-style diagram showing Lake Roosevelt, the spillway, powerhouse areas, pump-generating plant, visitor center and Columbia River. The controls below provide an accessible way to explore each component.</desc>
           <defs>
             <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#17242a"/><stop offset="1" stopColor="#0d171b"/></linearGradient>
             <linearGradient id="water" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="#356c7c"/><stop offset="1" stopColor="#4d8290"/></linearGradient>
@@ -122,7 +123,7 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
           </g>}
 
           {engineering && <g className="engineering-labels" aria-hidden="true">
-            <text x="500" y="145">Crest length 5,223 ft</text>
+            <text x="500" y="145">Total length 5,223 ft</text>
             <text x="500" y="392">Hydraulic head {n(displayHead, 1)} ft{headIsEstimated ? ' est.' : ''}</text>
             <text x="170" y="185">Full pool 1,290 ft</text>
             <text x="800" y="448">Installed capacity 6,809 MW</text>
@@ -143,7 +144,7 @@ function DamModel({ status }: { status: GrandCouleeStatus }) {
         {selected === 'spillway' && <div className="detail-live"><strong>{spillLabel}</strong><span>{status.flow.spillKcfs === null ? 'No numeric USACE spill observation is currently publishing' : `${n(status.flow.spillKcfs, 2)} kcfs reported`}</span></div>}
         {selected === 'pumps' && <div className="detail-live"><strong>{status.pumping.banksLakePumpKcfs !== null ? `${n(status.pumping.banksLakePumpKcfs, 2)} kcfs` : 'Latest data unavailable'}</strong><span>Banks Lake pumping flow</span></div>}
         {selected === 'visitor' && <div className="detail-live"><strong>{status.visitor.visitorCenterStatus.toUpperCase()}</strong><span>{status.visitor.visitorCenterDetail}</span></div>}
-        {engineering && <dl className="engineering-list"><div><dt>Dam height</dt><dd>550 ft</dd></div><div><dt>Crest length</dt><dd>5,223 ft</dd></div><div><dt>Full pool</dt><dd>1,290 ft</dd></div><div><dt>{headIsEstimated ? 'Estimated head' : 'Current head'}</dt><dd>{n(displayHead, 1)} ft</dd></div>{headIsEstimated && <div><dt>Head method</dt><dd>USACE rating curve · low confidence</dd></div>}</dl>}
+        {engineering && <EngineeringFacts currentHeadFt={displayHead} headEstimated={headIsEstimated} />}
       </aside>
     </div>
   </section>;
@@ -204,7 +205,7 @@ export function GrandCouleeDashboard({ initialStatus }: Props) {
     <CurrentConditions status={status} />
     <OperationsHistory />
 
-    <section className="explain-section"><span className="eyebrow">HOW TO READ THIS TOOL</span><h2>Measured when published. Estimated only when explicitly labeled.</h2><div className="explain-grid"><article><h3>Operational telemetry is field-by-field</h3><p>Grand Coulee Live reads the USACE CWMS series independently. A current forebay or outflow value does not cause a missing spill, generation-flow or tailwater value to be treated as zero.</p></article><article><h3>Generation uses physics + calibration</h3><p>Estimated generation requires turbine flow and hydraulic head. The model is calibrated against reported Grand Coulee generation and is withheld whenever current turbine-flow telemetry is absent.</p></article><article><h3>Tailwater has a cautious fallback</h3><p>If measured tailwater is missing, Engineering Mode may show a low-confidence estimate from the official USACE Water Control Manual rating curve. Historical validation across 367 daily observations produced 0.31 ft MAE and 0.85 ft 95th-percentile absolute error, while USACE still notes that Rufus Woods Lake backwater can affect actual tailwater.</p></article><article><h3>Forecast stays separate from measured</h3><p>Bureau of Reclamation midnight Lake Roosevelt forecasts are shown only as planning context. The live lake-level card remains anchored to the measured CWMS forebay value.</p></article></div></section>
+    <section className="explain-section"><span className="eyebrow">HOW TO READ THIS TOOL</span><h2>Measured when published. Estimated only when explicitly labeled.</h2><div className="explain-grid"><article><h3>Operational telemetry is field-by-field</h3><p>Grand Coulee Live reads the USACE CWMS series independently. A current forebay or outflow value does not cause a missing spill, generation-flow or tailwater value to be treated as zero.</p></article><article><h3>Generation uses physics + calibration</h3><p>Estimated generation requires turbine flow and hydraulic head. The model is calibrated against reported Grand Coulee generation and is withheld whenever current turbine-flow telemetry is absent.</p></article><article><h3>Tailwater has a cautious fallback</h3><p>If measured tailwater is missing, Engineering Mode may show an estimated value from the official USACE Water Control Manual rating curve. Historical validation across 367 daily observations produced 0.31 ft MAE and 0.85 ft 95th-percentile absolute error, while USACE still notes that Rufus Woods Lake backwater can affect actual tailwater.</p></article><article><h3>Forecast stays separate from measured</h3><p>Bureau of Reclamation midnight Lake Roosevelt forecasts are shown only as planning context. The live lake-level card remains anchored to the measured CWMS forebay value.</p></article></div></section>
 
     <section className="faq-section"><span className="eyebrow">GRAND COULEE QUESTIONS</span><h2>What visitors usually want to know</h2><details><summary>How high is Lake Roosevelt right now?</summary><p>{status.reservoir.forebayFt === null ? 'The current USACE forebay value is temporarily unavailable.' : `The latest Grand Coulee forebay observation is ${n(status.reservoir.forebayFt,2)} feet, ${n(status.reservoir.belowFullPoolFt,2)} feet below the 1,290-foot full-pool reference.${status.lakeForecast?.nextElevationFt !== null && status.lakeForecast?.nextElevationFt !== undefined ? ` Reclamation's next midnight forecast is ${n(status.lakeForecast.nextElevationFt,1)} feet for ${shortDate(status.lakeForecast.nextDate)}.` : ''}`}</p></details><details><summary>Is Grand Coulee Dam spilling today?</summary><p>{status.flow.spillKcfs === null ? 'The USACE spill series is currently not publishing a numeric observation, so Grand Coulee Live does not infer a yes/no spill state.' : spillActive ? `Yes. The latest reported spill is ${n(status.flow.spillKcfs,2)} kcfs.` : 'No meaningful spill is reported in the latest numeric USACE observation.'}</p></details><details><summary>How much electricity is Grand Coulee generating?</summary><p>{status.generation.currentEstimatedMW === null ? 'The current estimate is unavailable because current turbine-flow telemetry is not publishing. The model remains ready and will resume automatically when the required USACE inputs return.' : `Grand Coulee Live estimates approximately ${n(status.generation.currentEstimatedMW,0)} MW from current turbine flow and hydraulic head. This is an estimate, not an official instantaneous MW reading.`}</p></details><details><summary>Can you tour Grand Coulee Dam?</summary><p>In the verified 2026 schedule, Reclamation offers free John W. Keys III Pump-Generating Plant tours Friday through Sunday from May 22 through October 31. Tours are first come, first served and can change or be canceled without notice.</p></details><details><summary>What time is the Grand Coulee laser show?</summary><p>{status.visitor.laserDetail}</p></details></section>
 

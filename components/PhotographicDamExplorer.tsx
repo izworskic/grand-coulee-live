@@ -69,6 +69,11 @@ function contextTime(value: string | null) {
   }).format(new Date(value));
 }
 
+function trend(value: number | null, digits = 2) {
+  if (value === null) return '—';
+  return `${value > 0 ? '↑' : value < 0 ? '↓' : '→'} ${Math.abs(value).toFixed(digits)}`;
+}
+
 export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus }) {
   const [selected, setSelected] = useState<HotspotId>('reservoir');
   const current = HOTSPOTS.find(point => point.id === selected) ?? HOTSPOTS[0];
@@ -76,6 +81,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
   const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
   const headEstimated = status.hydraulic.headSource === 'rating-curve';
   const hasRiverContext = [status.riverContext.inflowKcfs, status.riverContext.dailyOutflowKcfs, status.reservoir.change24hFt].some(value => value !== null);
+  const dailyDifference = status.recentRiver.dailyInflowMinusOutflowKcfs;
 
   const choose = (id: HotspotId) => {
     setSelected(id);
@@ -90,6 +96,18 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
     return null;
   })();
 
+  const inflowNote = dailyDifference === null
+    ? 'daily average'
+    : Math.abs(dailyDifference) < 0.5
+      ? 'about even with daily outflow'
+      : `${n(Math.abs(dailyDifference), 1)} kcfs ${dailyDifference > 0 ? 'above' : 'below'} daily outflow`;
+  const outflowNote = status.recentRiver.outflow7dAverageKcfs === null
+    ? 'daily average'
+    : `7-day avg ${n(status.recentRiver.outflow7dAverageKcfs, 1)} kcfs`;
+  const lakeNote = status.recentRiver.lake7dChangeFt === null
+    ? 'past 24 hours'
+    : `24h · 7d ${trend(status.recentRiver.lake7dChangeFt)} ft`;
+
   return (
     <section className="photo-dam-section" aria-labelledby="photo-dam-heading">
       <div className="section-heading-row photo-dam-heading-row">
@@ -101,9 +119,9 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
 
       {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee river context">
         <div className="river-context-heading"><span className="eyebrow">RIVER TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS</small></div>
-        <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
-        <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
-        <div><span>Lake change</span><strong>{status.reservoir.change24hFt === null ? '—' : `${status.reservoir.change24hFt > 0 ? '↑' : status.reservoir.change24hFt < 0 ? '↓' : '→'} ${Math.abs(status.reservoir.change24hFt).toFixed(2)} ft`}</strong><small>past 24 hours</small></div>
+        <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>{inflowNote}</small></div>
+        <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>{outflowNote}</small></div>
+        <div><span>Lake change</span><strong>{status.reservoir.change24hFt === null ? '—' : `${trend(status.reservoir.change24hFt)} ft`}</strong><small>{lakeNote}</small></div>
       </div>}
 
       <div className="photo-dam-key" aria-label="Dam structure key">

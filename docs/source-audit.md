@@ -1,94 +1,88 @@
 # Source audit — Grand Coulee Live
 
-Last reviewed: 2026-09-08/09
+Last reviewed: 2026-09-09
 
 ## Operational hydrology
 
-### Primary source: USACE CWMS Data API
+### Primary: USACE CWMS Data API
 
-- Swagger/API documentation: `https://cwms-data.usace.army.mil/cwms-data/swagger-ui`
-- Grand Coulee Water Data page: `https://water.usace.army.mil/overview/nwdp/locations/gcl`
-- CWMS time-series endpoint: `https://cwms-data.usace.army.mil/cwms-data/timeseries`
-- GCL catalog query: `https://cwms-data.usace.army.mil/cwms-data/catalog/timeseries?office=NWDP&like=GCL.*`
+Grand Coulee Live now uses the modern U.S. Army Corps of Engineers CWMS Data API as the primary operational source and reads each Grand Coulee series independently.
 
-The NWDP CWMS catalog currently exposes 44 `GCL.*` series. Core series used by Grand Coulee Live:
+Core series:
 
 - `GCL.Flow-Out.Ave.1Hour.1Hour.CBT-REV` — total outflow
 - `GCL.Flow-Gen.Ave.1Hour.1Hour.CBT-REV` — generation/turbine flow
 - `GCL.Flow-Spill.Ave.1Hour.1Hour.CBT-REV` — spill
-- `GCL.Elev-Forebay.Inst.1Hour.0.CBT-REV` — forebay / Lake Roosevelt
-- `GCL.Elev-Tailwater.Inst.1Hour.0.CBT-REV` — tailwater
+- `GCL.Elev-Forebay.Inst.1Hour.0.CBT-REV` — forebay / Lake Roosevelt elevation
+- `GCL.Elev-Tailwater.Inst.1Hour.0.CBT-REV` — tailwater elevation
 
-Related catalogued series include direct instantaneous/hourly total power, available capacity and spill-gate count. Catalog presence does **not** prove that numeric observations are currently publishing.
+Catalog:
+`https://cwms-data.usace.army.mil/cwms-data/catalog/timeseries?office=NWDP&like=GCL.*&page-size=500`
 
-### Current source condition
+Modern USACE Water Data location page:
+`https://water.usace.army.mil/overview/nwdp/locations/gcl`
 
-A live CI probe on September 8/9, 2026 found current numeric observations for:
-
-- total outflow: **87,500 cfs**
-- forebay / Lake Roosevelt: **1,278.50 ft**
-
-At the same source check, the API returned no numeric observations for current generation flow, spill, measured tailwater or direct plant MW despite those time-series IDs remaining catalogued.
-
-The application therefore reports **PARTIAL LIVE · 2/5 core fields**. Each core series is fetched independently. One failed/null series cannot suppress working values from the others, and null is never coerced to zero.
-
-### Legacy fallback: USACE CROHMS
+### Legacy fallback / daily calibration source
 
 - Hourly: `https://public.crohms.org/dd/nwdp/project_hourly/webexec/rep?ago=0&r=gcl`
 - Daily: `https://public.crohms.org/dd/nwdp/project_daily/webexec/rep?ago=0&r=gcl`
 - Hourly report configuration: `https://public.crohms.org/dd/nwdp/project_hourly/config/gcl.in`
 
-The legacy report configuration corroborates the same core CWMS time-series identifiers. The app compares valid CWMS and CROHMS hourly results and uses the fresher observation set.
+The application freshness-ranks valid hourly CWMS and legacy observations rather than assuming an HTTP-successful response contains usable telemetry.
 
-Daily CROHMS reports remain useful for reported generation, historical validation and Banks Lake pumping context even when the current hourly publication is incomplete.
+## Current upstream condition
 
-## Hydraulic-head fallback
+Latest automated probe on 2026-09-09 at approximately 02:24 UTC:
 
-Official engineering reference:
+- total outflow REV: **92,200 cfs** at 02:00 UTC
+- forebay REV: **1,278.50 ft** at 02:00 UTC
+- generation-flow REV/RAW: no numeric values
+- spill REV/RAW: no numeric values
+- measured tailwater REV/RAW: no numeric values
+- direct power instantaneous REV/RAW: no numeric values
+- direct hourly power REV/RAW: no numeric values
+- available-capacity REV: no numeric values
+- gates-open REV: no numeric values
 
-- Grand Coulee Water Control Manual (2022): `https://water.usace.army.mil/cda/documents/wc/3395/GrandCouleeDam_WCM_Final_10142022_combined_R.pdf`
+The CWMS catalog still exposes the expected Grand Coulee series. The current condition is therefore a field-publication gap, not evidence that those quantities are zero.
 
-Plate 7-5 publishes the Grand Coulee project tailwater rating curve. When measured tailwater is absent, the app may linearly interpolate that official curve from current total outflow and calculate:
+Grand Coulee Live reports **PARTIAL LIVE · 2/5 core fields** and withholds:
 
-`estimated head = measured forebay - estimated tailwater`
+- current generation/turbine flow
+- current estimated MW
+- current spill yes/no state
+- measured tailwater
 
-This is always labeled **estimated**, not measured. The manual cautions that Rufus Woods Lake backwater affects actual project tailwater.
+The product does not derive generation flow by subtracting an unknown spill value from total outflow and does not substitute BPA system-wide generation for Grand Coulee plant output.
 
-Validation against 367 historical USACE daily observations spanning 38.3–170.9 kcfs total outflow:
+## Tailwater/head fallback
 
-- MAE: **0.31 ft**
+The official Grand Coulee Water Control Manual Plate 7-5 tailwater rating curve is used only when current total outflow and forebay are available but measured tailwater is not.
+
+Historical validation against 367 USACE daily observations over 38.3–170.9 kcfs produced:
+
+- tailwater/head MAE: **0.31 ft**
 - median absolute error: **0.23 ft**
-- P90 absolute error: **0.67 ft**
-- P95 absolute error: **0.85 ft**
+- 90th-percentile absolute error: **0.67 ft**
+- 95th-percentile absolute error: **0.85 ft**
 - maximum absolute error: **2.04 ft**
-- bias: approximately **0.06 ft**
 
-## Generation estimate
+This remains explicitly **ESTIMATED** because USACE notes that Rufus Woods Lake backwater can affect actual tailwater.
 
-Grand Coulee Live does not claim a measured real-time MW value unless an official measured MW source actually publishes a numeric observation.
+## Generation-model validation
 
-The fallback estimator uses:
+The rolling hydraulic generation estimator is independently validated against reported daily generation over 346 out-of-sample evaluation days from 2025-09-15 through 2026-08-27.
 
-`P = rho × g × Q × H × eta`
+Current benchmark:
 
-where current generation/turbine flow and hydraulic head are combined with a rolling efficiency calibration derived from reported daily generation.
-
-Current 13-month out-of-sample validation:
-
-- 346 evaluation days
 - overall MAPE: **1.13%**
 - MAE: **25.4 MW**
+- bias: **+7.2 MW**
 - low-flow MAPE: **1.53%**
 - medium-flow MAPE: **1.20%**
 - high-flow MAPE: **0.65%**
 
-The estimator is withheld when current turbine-flow telemetry is absent, regardless of historical model accuracy.
-
-## Bureau of Reclamation reservoir context
-
-- Lake Roosevelt current/forecast page: `https://www.usbr.gov/pn/grandcoulee/lakelevel/`
-
-Reclamation publishes provisional/predicted midnight lake elevations and explicitly notes that actual levels may change with power operations, river operations, weather and emergencies. This is suitable for planning context but must remain labeled forecast/predicted rather than measured.
+The model passes its ≤8% release target. Current MW nevertheless remains unavailable while current turbine-flow telemetry is absent.
 
 ## Visitor schedules
 
@@ -97,6 +91,7 @@ Bureau of Reclamation sources:
 - Visitor information: `https://www.usbr.gov/pn/grandcoulee/visit/index.html`
 - Tours: `https://www.usbr.gov/pn/grandcoulee/visit/tour.html`
 - Laser show: `https://www.usbr.gov/pn/grandcoulee/visit/laser.html`
+- Lake Roosevelt forecast: `https://www.usbr.gov/pn/grandcoulee/lakelevel/`
 
 Verified 2026 rules implemented in code:
 
@@ -111,10 +106,30 @@ The schedule implementation refuses to reuse these dates in a future calendar ye
 - Weather: National Weather Service API point `47.955,-118.9833`.
 - Astronomy: local SunCalc calculation for Grand Coulee coordinates in `America/Los_Angeles`.
 
-## Secondary corroboration research
+## Camera/current-view policy
 
-University of Washington DART provides daily Grand Coulee river-environment data, including outflow, spill, spill percentage and elevation, sourced from federal/PUD datasets. It is being evaluated as a delayed corroboration layer only, not as a replacement for current CWMS telemetry.
+No dam-facing live government camera has been accepted as reliable enough to label a live Grand Coulee webcam. The product uses a `CURRENT CONDITIONS AT THE DAM` module with current weather/telemetry and an official Bureau of Reclamation reference photograph explicitly labeled **REFERENCE IMAGE · NOT LIVE**.
+
+A real camera can replace this fallback only after source ownership, stability and current-view semantics are verified.
+
+## Continuous monitoring
+
+`.github/workflows/source-watch.yml` runs every six hours and checks transport/format availability for:
+
+- USACE CWMS catalog
+- USACE Grand Coulee daily report
+- Reclamation visitor information
+- Reclamation tour schedule
+- Reclamation laser schedule
+- Reclamation Lake Roosevelt forecast
+- NWS point metadata
+
+The workflow also runs the individual CWMS telemetry probe so a healthy API with missing numeric Grand Coulee series is distinguishable from a complete upstream outage.
+
+The same cross-source and CWMS probes run non-blocking in normal CI so external outages do not masquerade as application-code failures.
 
 ## Source policy
 
-Every first-screen operational value must disclose whether it is measured, reported, calculated or estimated. A successful HTTP response is not enough to mark a field current. A failed or null source must degrade to unavailable/stale, never to zero or an invented value.
+Every first-screen operational metric must retain timestamp/provenance and a measured/reported/calculated/estimated classification. Missing or stale upstream values degrade to unavailable/delayed/stale states rather than invented values.
+
+USACE water-control data are provisional and subject to revision.

@@ -7,6 +7,7 @@ import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITO
 import { getWeather } from '@/lib/data/weather';
 import { buildCalibration, estimateGenerationMW, INSTALLED_CAPACITY_MW } from '@/lib/generation';
 import { estimateHeadFromRatingCurve, estimateTailwaterFromOutflow, GRAND_COULEE_WCM_URL } from '@/lib/hydraulics';
+import { buildRecentRiverIntelligence } from '@/lib/riverIntelligence';
 import type { Confidence, Freshness, GrandCouleeStatus, HourlyObservation, SourceProvenance } from '@/lib/types';
 
 const FULL_POOL_FT = 1290;
@@ -82,7 +83,8 @@ function telemetryStatus(latest: HourlyObservation | null): GrandCouleeStatus['t
   };
 }
 
-function liveObservation(status: Pick<GrandCouleeStatus, 'flow' | 'reservoir'>): string {
+function liveObservation(status: Pick<GrandCouleeStatus, 'flow' | 'reservoir' | 'recentRiver'>): string {
+  if (status.recentRiver.signal) return status.recentRiver.signal;
   if (status.reservoir.forebayFt !== null && status.reservoir.change24hFt !== null) {
     const change = status.reservoir.change24hFt;
     if (Math.abs(change) < 0.01) return `Lake Roosevelt is ${status.reservoir.forebayFt.toFixed(2)} ft and steady over 24 hours.`;
@@ -93,7 +95,7 @@ function liveObservation(status: Pick<GrandCouleeStatus, 'flow' | 'reservoir'>):
   return '';
 }
 
-function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'flow' | 'reservoir'>) {
+function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'flow' | 'reservoir' | 'recentRiver'>) {
   const live = liveObservation(status);
 
   if (status.visitor.visitorCenterStatus === 'open') {
@@ -135,6 +137,12 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const latestDaily = daily.filter(row => Object.values(row).some(v => typeof v === 'number')).at(-1) ?? null;
   const latestReported = [...daily].reverse().find(row => row.averageGenerationMW !== null) ?? null;
   const calibration = buildCalibration(daily);
+  const recentRiver = buildRecentRiverIntelligence(
+    daily,
+    latest?.totalOutflowKcfs ?? null,
+    riverContext.inflowKcfs,
+    riverContext.dailyOutflowKcfs
+  );
 
   const estimatedTailwaterFt = latest?.tailwaterFt === null || latest?.tailwaterFt === undefined
     ? estimateTailwaterFromOutflow(latest?.totalOutflowKcfs ?? null)
@@ -276,6 +284,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       spillKcfs: latest?.spillKcfs ?? null
     },
     riverContext,
+    recentRiver,
     hydraulic: {
       tailwaterFt: latest?.tailwaterFt ?? null,
       headFt: latest?.headFt ?? null,

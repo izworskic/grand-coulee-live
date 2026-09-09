@@ -88,19 +88,19 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
   const spill = spillPhrase(status.flow.spillKcfs);
   if (status.visitor.laserStatus === 'tonight') {
     return {
-      headline: status.visitor.visitorCenterStatus === 'open' ? 'GOOD VISITOR WINDOW' : 'COME LATER FOR THE LASER SHOW',
-      detail: `${precip <= 30 ? 'Low precipitation risk' : 'Some rain risk'}, ${spill}, sunset ${status.astronomy.sunset}, and tonight's laser show ${status.visitor.laserDetail.toLowerCase()}.`
+      headline: status.visitor.visitorCenterStatus === 'open' ? 'THIS IS A GOOD TIME TO COME' : 'COME BACK THIS EVENING',
+      detail: `${precip <= 30 ? 'The weather looks cooperative' : 'Keep an eye on the rain chance'}. ${spill === 'active spill' ? 'The spillway is active' : spill === 'no meaningful spill reported' ? 'No meaningful spill is reported' : 'Current spill data is unavailable'}. Sunset is ${status.astronomy.sunset}, and ${status.visitor.laserDetail.toLowerCase()}.`
     };
   }
   if (status.visitor.visitorCenterStatus === 'open') {
     return {
-      headline: 'GOOD TIME TO VISIT',
-      detail: `${status.weather?.shortForecast ?? 'Visitor conditions are available'}, with the Visitor Center open now${status.visitor.nextTour ? ` and ${status.visitor.nextTourDetail.toLowerCase()}` : ''}.`
+      headline: 'COME ON OVER',
+      detail: `The Visitor Center is open now. ${status.weather?.shortForecast ?? 'Current visitor conditions are available'}${status.visitor.nextTour ? `, and ${status.visitor.nextTourDetail.toLowerCase()}` : '.'}`
     };
   }
   return {
-    headline: 'OUTDOOR VIEWING AVAILABLE',
-    detail: 'The Visitor Center is closed right now. Current operations and daylight conditions are still shown for planning an exterior visit.'
+    headline: 'THE DAM IS STILL WORTH A LOOK',
+    detail: 'The Visitor Center is closed right now, but the public viewpoints are still the place to take in the scale of Grand Coulee. Use the live conditions here to decide how long you want to stay.'
   };
 }
 

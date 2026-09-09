@@ -21,35 +21,35 @@ const PHOTO_SOURCE = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.
 const HOTSPOTS: Hotspot[] = [
   {
     id: 'reservoir', label: 'Lake Roosevelt', short: 'Lake Roosevelt', x: 17, y: 47,
-    body: 'Franklin D. Roosevelt Lake is the reservoir upstream of Grand Coulee. The live waterline is reported separately from this reference photograph.'
+    body: 'Everything behind the dam is Lake Roosevelt. Watch the live elevation beside the photo; the lake can move several feet as the project responds to river and seasonal demands.'
   },
   {
     id: 'spillway', label: 'Main spillway', short: 'Spillway', x: 48, y: 61,
-    body: 'The central spillway passes water over the dam when operators release water outside the generating units. The live tool only marks spill active when USACE publishes a numeric hourly spill observation; a dated DART daily average may appear as fallback context.'
+    body: 'Start in the middle. That broad center section is the spillway, where water can pass the dam without going through a turbine. We only call it active when a real spill observation is publishing.'
   },
   {
     id: 'left', label: 'Left Powerhouse', short: 'Left powerhouse', x: 35, y: 66,
-    body: 'The Left Powerhouse is one of the two original powerhouse blocks flanking the spillway. Reclamation lists nine 125 MW main generators plus three 10 MW station-service generators.'
+    body: 'Look just downstream and left of the spillway. This is one of Grand Coulee’s original powerhouse blocks, with nine main generators and three smaller station-service units.'
   },
   {
     id: 'right', label: 'Right Powerhouse', short: 'Right powerhouse', x: 58, y: 64,
-    body: 'The Right Powerhouse is the other original powerhouse block. Reclamation lists nine 125 MW generators here.'
+    body: 'Now look to the other side of the spillway. The Right Powerhouse mirrors the original generating story with nine main generators of its own.'
   },
   {
     id: 'third', label: 'Nathaniel “Nat” Washington Power Plant', short: 'Third Power Plant', x: 63, y: 50,
-    body: 'The Third Power Plant expanded Grand Coulee with six very large generating units and is the largest single powerhouse at the complex.'
+    body: 'This is where Grand Coulee gets even bigger. The Third Power Plant added six enormous units and became the largest single powerhouse in the complex.'
   },
   {
     id: 'pumps', label: 'John W. Keys III Pump-Generating Plant', short: 'Pump plant', x: 57, y: 37,
-    body: 'The pump-generating plant lifts Columbia River water toward Banks Lake for the Columbia Basin Project. Six of its twelve pumping units are reversible pump-generators.'
+    body: 'This is the part many visitors don’t expect: Grand Coulee also sends water uphill. The pump-generating plant lifts Columbia River water toward Banks Lake, and six units can reverse and generate power.'
   },
   {
     id: 'visitor', label: 'Grand Coulee Visitor Center', short: 'Visitor center', x: 65, y: 76,
-    body: 'The visitor center sits below the dam and serves as the public hub for exhibits, visitor information, seasonal tours and the evening laser show.'
+    body: 'That low building below the dam is your best starting point. Go inside for the exhibits, get oriented, and check the day’s tour and evening-show information.'
   },
   {
     id: 'viewpoints', label: 'Public viewing area', short: 'Viewpoints', x: 73, y: 72,
-    body: 'Public viewing areas around the visitor complex provide the safest way to see the dam. This tool does not identify restricted operational areas as visitor destinations.'
+    body: 'For a visitor, stay with the public viewing areas around the Visitor Center. You’ll get the scale of the dam without wandering toward working or restricted areas.'
   }
 ];
 
@@ -110,9 +110,9 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
     <section className="photo-dam-section" aria-labelledby="photo-dam-heading">
       <div className="section-heading-row photo-dam-heading-row">
         <div>
-          <span className="eyebrow">INTERACTIVE GRAND COULEE</span>
-          <h2 id="photo-dam-heading">Explore the real dam</h2>
-          <p className="photo-dam-intro">A Bureau of Reclamation aerial photograph replaces the old schematic. Tap the marked structures to understand what they do; live operating data stays separate from the historical reference image.</p>
+          <span className="eyebrow">TAKE A LOOK AT THE DAM</span>
+          <h2 id="photo-dam-heading">Start in the middle, then work your way out.</h2>
+          <p className="photo-dam-intro">Begin with the spillway, then trace the powerhouse blocks, Lake Roosevelt and the pump plant. Tap a marker and I’ll point out what matters.</p>
         </div>
         <div className="mode-controls" role="group" aria-label="Dam photo display modes">
           <button className={flowMode ? 'active' : ''} onClick={() => setFlowMode(v => !v)} aria-pressed={flowMode}>Flow overlay</button>
@@ -159,7 +159,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
         </div>
 
         <aside className="photo-dam-detail" aria-live="polite">
-          <span className="eyebrow">SELECTED STRUCTURE</span>
+          <span className="eyebrow">WHAT YOU’RE LOOKING AT</span>
           <div className="detail-index">{String(HOTSPOTS.findIndex(point => point.id === selected) + 1).padStart(2, '0')}</div>
           <h3>{current.label}</h3>
           <p>{current.body}</p>
@@ -169,7 +169,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
       </div>
 
       {hasRiverContext && <div className="river-context-strip" aria-label="Latest Grand Coulee daily river context">
-        <div className="river-context-heading"><span className="eyebrow">LATEST DAILY RIVER CONTEXT</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
+        <div className="river-context-heading"><span className="eyebrow">WHAT THE RIVER DID TODAY</span><small>{contextTime(status.riverContext.observedAt)} · USACE CWMS{status.riverContext.dailySpillDate ? ' + DART spill' : ''}</small></div>
         <div><span>Inflow</span><strong>{status.riverContext.inflowKcfs === null ? '—' : `${n(status.riverContext.inflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
         <div><span>Outflow</span><strong>{status.riverContext.dailyOutflowKcfs === null ? '—' : `${n(status.riverContext.dailyOutflowKcfs, 1)} kcfs`}</strong><small>daily average</small></div>
         <div><span>Spill</span><strong>{status.riverContext.dailySpillKcfs === null ? '—' : `${n(status.riverContext.dailySpillKcfs, 2)} kcfs`}</strong><small>{status.riverContext.dailySpillDate ? `${shortDate(status.riverContext.dailySpillDate)} daily avg${status.riverContext.dailySpillPercent === null ? '' : ` · ${n(status.riverContext.dailySpillPercent, 1)}%`}` : 'DART temporarily unavailable'}</small></div>

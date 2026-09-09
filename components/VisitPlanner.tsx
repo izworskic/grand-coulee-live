@@ -88,9 +88,9 @@ export function VisitPlanner({ status }: { status: GrandCouleeStatus }) {
     <section className="visit-planner-section" aria-labelledby="visit-planner-heading">
       <div className="visit-planner-head">
         <div>
-          <span className="eyebrow">PLAN MY VISIT</span>
-          <h2 id="visit-planner-heading">Turn the live dam into a smart day.</h2>
-          <p>Tell us when you arrive, how much time you have and what matters most. The plan is built from the verified Reclamation schedule, Pacific Time, tour constraints and today’s live conditions where they apply.</p>
+          <span className="eyebrow">PLAN YOUR STOP</span>
+          <h2 id="visit-planner-heading">Let’s make the most of your time here.</h2>
+          <p>Choose when you’ll arrive, how long you have and what you came to see. We’ll put the day in the right order around tours, the Visitor Center, daylight, weather and tonight’s show.</p>
         </div>
         <div className="visit-clocks" aria-label="Current time at Grand Coulee and your current time">
           <div><span>DAM TIME</span><strong>{clock ? formatClock(clock, PACIFIC) : formatClock(new Date(status.retrievedAt), PACIFIC)}</strong></div>
@@ -101,36 +101,36 @@ export function VisitPlanner({ status }: { status: GrandCouleeStatus }) {
       <div className="planner-shell">
         <div className="planner-controls">
           <label className="planner-field">
-            <span>Arriving at Grand Coulee</span>
+            <span>When will you get here?</span>
             <div className="arrival-row">
               <input type="datetime-local" value={arrivalLocal} onChange={event => { setArrivalLocal(event.target.value); window.gtag?.('event', 'visit_planner_arrival_change'); }} />
               <button type="button" onClick={setNow}>Arrive now</button>
             </div>
-            <small>Enter the time at the dam. All itinerary times are Pacific Time.</small>
+            <small>Use the time at the dam. Everything below stays on Pacific Time.</small>
           </label>
 
           <fieldset className="budget-field">
-            <legend>I have</legend>
+            <legend>How much time do you have?</legend>
             <div className="budget-buttons">
               {BUDGETS.map(option => <button key={String(option.value)} type="button" className={budget === option.value ? 'selected' : ''} onClick={() => updateBudget(option.value)} aria-pressed={budget === option.value}>{option.label}</button>)}
             </div>
           </fieldset>
 
           <div className="planner-selects">
-            <label className="planner-field"><span>I care most about</span><select value={interest} onChange={event => updateInterest(event.target.value as VisitInterest)}>{INTERESTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-            <label className="planner-field"><span>Walking preference</span><select value={mobility} onChange={event => setMobility(event.target.value as MobilityPreference)}><option value="standard">Standard visit</option><option value="minimize-walking">Minimize walking</option></select></label>
+            <label className="planner-field"><span>What do you most want to see?</span><select value={interest} onChange={event => updateInterest(event.target.value as VisitInterest)}>{INTERESTS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label className="planner-field"><span>How much walking?</span><select value={mobility} onChange={event => setMobility(event.target.value as MobilityPreference)}><option value="standard">Standard visit</option><option value="minimize-walking">Minimize walking</option></select></label>
           </div>
         </div>
 
         <article className="plan-verdict" aria-live="polite">
-          <span className="eyebrow">YOUR BEST PLAN</span>
+          <span className="eyebrow">HERE’S HOW I’D DO IT</span>
           <h3>{plan.verdict}</h3>
           <p>{plan.summary}</p>
           <div className="plan-inventory">
-            <div><span>VISIT WINDOW</span><strong>{plan.totalWindowMinutes} min</strong></div>
-            <div><span>CENTER TIME THAT FITS</span><strong>{plan.centerMinutesAvailable ? `${plan.centerMinutesAvailable} min` : 'None'}</strong></div>
-            <div><span>TOURS THAT FIT</span><strong>{plan.reachableTours.length}</strong></div>
-            <div><span>VISITOR PRESSURE</span><strong>{plan.visitorPressure}</strong></div>
+            <div><span>YOUR WINDOW</span><strong>{plan.totalWindowMinutes} min</strong></div>
+            <div><span>TIME INSIDE</span><strong>{plan.centerMinutesAvailable ? `${plan.centerMinutesAvailable} min` : 'None'}</strong></div>
+            <div><span>TOURS IN REACH</span><strong>{plan.reachableTours.length}</strong></div>
+            <div><span>LIKELY CROWD LEVEL</span><strong>{plan.visitorPressure}</strong></div>
           </div>
           <p className="pressure-note">{plan.pressureReason}</p>
           {sameDay && <div className="same-day-signal"><span>LIVE CONDITIONS APPLY TO THIS PLAN</span><strong>{status.weather ? `${Math.round(status.weather.temperatureF ?? 0)}°F · ${status.weather.shortForecast}` : 'Weather unavailable'} · sunset {status.astronomy.sunset}</strong>{laserMinutes !== null && laserMinutes > 0 && <small>{Math.floor(laserMinutes / 60)}h {laserMinutes % 60}m until tonight’s laser show from the latest page observation.</small>}</div>}
@@ -140,7 +140,7 @@ export function VisitPlanner({ status }: { status: GrandCouleeStatus }) {
 
       <div className="visit-itinerary">
         <div className="itinerary-main">
-          <div className="itinerary-heading"><span className="eyebrow">ITINERARY · PACIFIC TIME</span><h3>What to do, in order</h3></div>
+          <div className="itinerary-heading"><span className="eyebrow">YOUR ROUTE · PACIFIC TIME</span><h3>Start here, then keep moving</h3></div>
           <ol>
             {plan.steps.map((step, index) => (
               <li key={`${step.start}-${step.title}`} className={`plan-step ${step.kind}`}>
@@ -151,28 +151,28 @@ export function VisitPlanner({ status }: { status: GrandCouleeStatus }) {
           </ol>
         </div>
         <aside className="plan-alerts">
-          <span className="eyebrow">KNOW BEFORE YOU GO</span>
-          {plan.alerts.length ? plan.alerts.map(alert => <p key={alert}>{alert}</p>) : <p>No special schedule conflicts were detected for this visit window.</p>}
+          <span className="eyebrow">A COUPLE THINGS BEFORE YOU GO</span>
+          {plan.alerts.length ? plan.alerts.map(alert => <p key={alert}>{alert}</p>) : <p>You’re in good shape. Nothing in the published schedule complicates this visit.</p>}
         </aside>
       </div>
 
       <div className="experience-expectations">
         <article>
           <span className="eyebrow">PLANT TOUR</span>
-          <h3>What you’ll actually experience</h3>
-          <ul><li>John W. Keys III Pump-Generating Plant</li><li>About one hour</li><li>First come, first served; limited capacity</li><li>Security screening and bus transportation</li><li>Leave purses, backpacks, fanny packs and packages in the vehicle; no onsite storage</li></ul>
+          <h3>If you can take the tour, take it.</h3>
+          <p>You’ll board a bus on the east side of the dam, go inside the John W. Keys III Pump-Generating Plant, and finish with a ride across the top of Grand Coulee.</p><ul><li>About one hour</li><li>Free, first come and limited capacity</li><li>Security screening before boarding</li><li>Leave bags, backpacks, fanny packs and packages in the vehicle; there is no onsite storage</li></ul>
           <a href="https://www.usbr.gov/pn/grandcoulee/visit/tour.html" target="_blank" rel="noreferrer">Official Reclamation tour information ↗</a>
         </article>
         <article>
           <span className="eyebrow">ONE RIVER, MANY VOICES</span>
-          <h3>Plan for the real laser show</h3>
-          <ul><li>Approximately 30 minutes</li><li>Projected across Grand Coulee Dam</li><li>Narrated historical and interpretive presentation</li><li>Free during the published season</li><li>Can be canceled or changed without notice</li></ul>
+          <h3>See the dam after dark.</h3>
+          <p>The face of the dam becomes the screen. The half-hour show uses light, narration and different voices to tell the story of the river, the people here and the project that changed both.</p><ul><li>Approximately 30 minutes</li><li>Free during the published season</li><li>No ticket required</li><li>Can change or be canceled without notice</li></ul>
           <a href="https://www.usbr.gov/pn/grandcoulee/visit/laser.html" target="_blank" rel="noreferrer">Official Reclamation laser-show information ↗</a>
         </article>
         <article className="thoughtful-visit-card">
-          <span className="eyebrow">A THOUGHTFUL VISIT</span>
-          <h3>See more than concrete and megawatts.</h3>
-          <p>The dam’s benefits—hydropower, irrigation, flood management and recreation—sit alongside permanent ecological and cultural consequences. Use the Visitor Center and the interactive dam to understand both while the landscape is in front of you.</p>
+          <span className="eyebrow">THE WHOLE STORY</span>
+          <h3>Take in more than the scale of the concrete.</h3>
+          <p>Grand Coulee brought power, irrigation, flood management and recreation. It also transformed the river, salmon runs and places important to Indigenous communities. Keep both stories in view while you’re here.</p>
         </article>
       </div>
     </section>

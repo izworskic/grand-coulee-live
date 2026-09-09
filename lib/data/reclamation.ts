@@ -6,8 +6,10 @@ export const VISITOR_URL = 'https://www.usbr.gov/pn/grandcoulee/visit/index.html
 export const TOUR_URL = 'https://www.usbr.gov/pn/grandcoulee/visit/tour.html';
 export const LASER_URL = 'https://www.usbr.gov/pn/grandcoulee/visit/laser.html';
 
-const TOUR_TIMES_2026 = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00'];
-const SOURCE_VERIFIED_YEAR = 2026;
+export const TOUR_TIMES_2026 = ['09:00', '10:00', '11:00', '13:00', '14:00', '15:00'];
+export const SOURCE_VERIFIED_YEAR = 2026;
+export const TOUR_DURATION_MINUTES = 60;
+export const LASER_DURATION_MINUTES = 30;
 
 function thanksgiving(year: number) {
   let d = DateTime.fromObject({ year, month: 11, day: 1 }, { zone: ZONE });
@@ -15,12 +17,12 @@ function thanksgiving(year: number) {
   return d.plus({ days: 21 }).toISODate();
 }
 
-function isClosureDay(date: DateTime) {
+export function isClosureDay(date: DateTime) {
   const iso = date.toISODate();
   return iso === `${date.year}-01-01` || iso === `${date.year}-12-25` || iso === thanksgiving(date.year);
 }
 
-function atTime(day: DateTime, hhmm: string) {
+export function atTime(day: DateTime, hhmm: string) {
   const [hour, minute] = hhmm.split(':').map(Number);
   return day.startOf('day').set({ hour, minute });
 }
@@ -29,14 +31,14 @@ function fmt(dt: DateTime) {
   return dt.toFormat('h:mm a');
 }
 
-function tourDay(day: DateTime) {
+export function tourDay(day: DateTime) {
   if (day.year !== SOURCE_VERIFIED_YEAR) return false;
   const start = DateTime.fromISO('2026-05-22', { zone: ZONE }).startOf('day');
   const end = DateTime.fromISO('2026-10-31', { zone: ZONE }).endOf('day');
   return day >= start && day <= end && [5, 6, 7].includes(day.weekday);
 }
 
-function laserTime(day: DateTime): string | null {
+export function laserTime(day: DateTime): string | null {
   if (day.year !== SOURCE_VERIFIED_YEAR) return null;
   const start = DateTime.fromISO('2026-05-22', { zone: ZONE }).startOf('day');
   const end = DateTime.fromISO('2026-09-30', { zone: ZONE }).endOf('day');
@@ -44,6 +46,39 @@ function laserTime(day: DateTime): string | null {
   if (day.month <= 7) return '22:00';
   if (day.month === 8) return '21:30';
   return '20:30';
+}
+
+export interface VisitDaySchedule {
+  verified: boolean;
+  date: string;
+  visitorCenterOpenAt: string | null;
+  visitorCenterCloseAt: string | null;
+  visitorCenterClosedHoliday: boolean;
+  tourDepartures: string[];
+  laserAt: string | null;
+  tourDurationMinutes: number;
+  laserDurationMinutes: number;
+}
+
+export function getVisitDaySchedule(dayInput: DateTime): VisitDaySchedule {
+  const day = dayInput.setZone(ZONE);
+  const verified = day.year === SOURCE_VERIFIED_YEAR;
+  const closedHoliday = verified && isClosureDay(day);
+  const open = verified && !closedHoliday ? day.startOf('day').set({ hour: 8, minute: 30 }) : null;
+  const close = verified && !closedHoliday ? day.startOf('day').set({ hour: 17 }) : null;
+  const tours = verified && tourDay(day) ? TOUR_TIMES_2026.map(time => atTime(day, time).toISO()).filter((value): value is string => Boolean(value)) : [];
+  const laserClock = verified ? laserTime(day) : null;
+  return {
+    verified,
+    date: day.toISODate() ?? '',
+    visitorCenterOpenAt: open?.toISO() ?? null,
+    visitorCenterCloseAt: close?.toISO() ?? null,
+    visitorCenterClosedHoliday: closedHoliday,
+    tourDepartures: tours,
+    laserAt: laserClock ? atTime(day, laserClock).toISO() : null,
+    tourDurationMinutes: TOUR_DURATION_MINUTES,
+    laserDurationMinutes: LASER_DURATION_MINUTES
+  };
 }
 
 export async function verifyReclamationSources(): Promise<boolean> {
@@ -78,7 +113,7 @@ export function getVisitorStatus(nowInput = DateTime.now().setZone(ZONE), source
   const close = now.startOf('day').set({ hour: 17 });
   const closedHoliday = isClosureDay(now);
   const centerOpen = !closedHoliday && now >= open && now < close;
-  let visitorCenterDetail = centerOpen ? 'Closes at 5:00 PM' : closedHoliday ? 'Closed for a federal holiday' : now < open ? 'Opens at 8:30 AM' : 'Closed for today';
+  const visitorCenterDetail = centerOpen ? 'Closes at 5:00 PM' : closedHoliday ? 'Closed for a federal holiday' : now < open ? 'Opens at 8:30 AM' : 'Closed for today';
 
   const toursToday = tourDay(now) ? TOUR_TIMES_2026.map(time => fmt(atTime(now, time))) : [];
   const upcomingToday = tourDay(now) ? TOUR_TIMES_2026.map(time => atTime(now, time)).find(time => time > now) : undefined;

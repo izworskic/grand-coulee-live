@@ -6,15 +6,15 @@ import './current-conditions.css';
 import './interpretive-depth.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://grandcoulee.chrisizworski.com'),
+  metadataBase: new URL('https://chrisizworski.com'),
   title: 'Grand Coulee Dam Live: Lake Roosevelt Level, Spillway, Tours & Laser Show',
   description: "See Grand Coulee Dam live operating conditions, Lake Roosevelt level, spillway flow, estimated power generation, plant tours, laser-show times and today's visitor conditions.",
-  alternates: { canonical: '/' },
+  alternates: { canonical: '/national-tools/grand-coulee/' },
   openGraph: {
     title: 'Grand Coulee Dam Live',
     description: 'Live operations, Lake Roosevelt, tours and tonight’s visitor window.',
     type: 'website',
-    url: '/'
+    url: '/national-tools/grand-coulee/'
   },
   twitter: { card: 'summary_large_image', title: 'Grand Coulee Dam Live', description: 'Live operations, Lake Roosevelt, tours and tonight’s visitor window.' },
   other: { 'google-adsense-account': 'ca-pub-8222782620788075' }

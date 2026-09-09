@@ -16,6 +16,9 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
+      - name: Validate generation model against reported daily history
+        continue-on-error: true
+        run: npm run backtest
       - name: Probe live Grand Coulee CWMS series
         continue-on-error: true
         run: node scripts/probe-cwms.mjs

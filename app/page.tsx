@@ -1,6 +1,4 @@
-import { CurrentConditions } from '@/components/CurrentConditions';
 import { GrandCouleeDashboard } from '@/components/GrandCouleeDashboard';
-import { OperationsHistory } from '@/components/OperationsHistory';
 import { getGrandCouleeStatus } from '@/lib/status';
 
 export const revalidate = 600;
@@ -20,8 +18,6 @@ export default async function HomePage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <GrandCouleeDashboard initialStatus={status} />
-      <CurrentConditions status={status} />
-      <OperationsHistory />
     </>
   );
 }

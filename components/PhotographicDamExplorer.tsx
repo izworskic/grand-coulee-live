@@ -78,8 +78,6 @@ function shortDate(value: string | null) {
 
 export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus }) {
   const [selected, setSelected] = useState<HotspotId>('spillway');
-  const [flowMode, setFlowMode] = useState(true);
-  const [engineering, setEngineering] = useState(false);
   const current = HOTSPOTS.find(point => point.id === selected) ?? HOTSPOTS[1];
   const spilling = status.flow.spillKcfs !== null && status.flow.spillKcfs > 0.05;
   const displayHead = status.hydraulic.headFt ?? status.hydraulic.estimatedHeadFt;
@@ -113,10 +111,6 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
           <span className="eyebrow">GRAND COULEE</span>
           <h2 id="photo-dam-heading">See the dam</h2>
         </div>
-        <div className="mode-controls" role="group" aria-label="Dam photo display modes">
-          <button className={flowMode ? 'active' : ''} onClick={() => setFlowMode(v => !v)} aria-pressed={flowMode}>Flow overlay</button>
-          <button className={engineering ? 'active' : ''} onClick={() => setEngineering(v => !v)} aria-pressed={engineering}>Engineering</button>
-        </div>
       </div>
 
       <div className="photo-dam-grid">
@@ -125,14 +119,12 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
             <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River" loading="lazy" />
             <div className="dam-photo-vignette" aria-hidden="true" />
 
-            {flowMode && (
-              <svg className="dam-photo-flow" viewBox="0 0 1000 664" aria-hidden="true" preserveAspectRatio="none">
-                {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M380 405 C395 470 420 500 470 538" />}
-                {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M585 400 C575 455 570 500 540 540" />}
-                {spilling && <path className="photo-flow spill" d="M495 385 C500 450 505 500 515 540" />}
-                {status.pumping.banksLakePumpKcfs !== null && <path className="photo-flow pump" d="M575 355 C610 315 655 285 705 255" />}
-              </svg>
-            )}
+            <svg className="dam-photo-flow" viewBox="0 0 1000 664" aria-hidden="true" preserveAspectRatio="none">
+              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M380 405 C395 470 420 500 470 538" />}
+              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M585 400 C575 455 570 500 540 540" />}
+              {spilling && <path className="photo-flow spill" d="M495 385 C500 450 505 500 515 540" />}
+              {status.pumping.banksLakePumpKcfs !== null && <path className="photo-flow pump" d="M575 355 C610 315 655 285 705 255" />}
+            </svg>
 
             {HOTSPOTS.map((point, index) => (
               <button
@@ -162,7 +154,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
           <h3>{current.label}</h3>
           <p>{current.body}</p>
           {detailValue && <div className="photo-detail-live"><span>{selected === 'spillway' && status.flow.spillKcfs === null && status.riverContext.dailySpillKcfs !== null ? 'DAILY' : 'NOW'}</span><strong>{detailValue}</strong></div>}
-          {engineering && <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />}
+          <EngineeringFacts currentHeadFt={displayHead} headEstimated={headEstimated} />
         </aside>
       </div>
 

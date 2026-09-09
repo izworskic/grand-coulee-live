@@ -1,7 +1,6 @@
 import { DateTime } from 'luxon';
 import { getAstronomy } from '@/lib/data/astronomy';
 import { getCwmsDailyRiverContext } from '@/lib/data/cwms';
-import { DART_DAILY_URL, getLatestDartGrandCouleeDaily } from '@/lib/data/dart';
 import { getLakeLevelForecast, LAKE_LEVEL_URL } from '@/lib/data/lakeLevel';
 import { getDailyObservations, getHourlyObservations, USACE_DAILY_URL, USACE_HOURLY_URL, ZONE } from '@/lib/data/usace';
 import { getVisitorStatus, LASER_URL, TOUR_URL, verifyReclamationSources, VISITOR_URL } from '@/lib/data/reclamation';
@@ -18,6 +17,14 @@ function freshness(observedAt: string | null): Freshness {
   const ageHours = (Date.now() - Date.parse(observedAt)) / 3_600_000;
   if (ageHours < 2) return 'current';
   if (ageHours < 6) return 'delayed';
+  return 'stale';
+}
+
+function dailyTimestampFreshness(observedAt: string | null): Freshness {
+  if (!observedAt) return 'unavailable';
+  const ageHours = (Date.now() - Date.parse(observedAt)) / 3_600_000;
+  if (ageHours <= 36) return 'current';
+  if (ageHours <= 72) return 'delayed';
   return 'stale';
 }
 
@@ -60,18 +67,12 @@ function delta(rows: HourlyObservation[], latest: HourlyObservation | null, hour
   return latest.forebayFt - prior.forebayFt;
 }
 
-function spillPhrase(spillKcfs: number | null): string {
-  if (spillKcfs === null) return 'spill status unavailable';
-  return spillKcfs > 0.05 ? 'active spill' : 'no meaningful spill reported';
-}
-
 function telemetryStatus(latest: HourlyObservation | null): GrandCouleeStatus['telemetry'] {
+  // These are the two current hourly signals the public product promises.
+  // Generation flow, spill and tailwater remain optional engineering enhancements.
   const fields: Array<[string, number | null | undefined]> = [
     ['total outflow', latest?.totalOutflowKcfs],
-    ['generation flow', latest?.generationFlowKcfs],
-    ['spill', latest?.spillKcfs],
-    ['forebay', latest?.forebayFt],
-    ['tailwater', latest?.tailwaterFt]
+    ['Lake Roosevelt elevation', latest?.forebayFt]
   ];
   const missingCoreSeries = fields.filter(([, value]) => value === null || value === undefined).map(([label]) => label);
   const availableCoreSeries = fields.length - missingCoreSeries.length;
@@ -131,11 +132,10 @@ function decision(status: Pick<GrandCouleeStatus, 'visitor' | 'weather' | 'flow'
 export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
   const retrievedAt = new Date().toISOString();
   const now = DateTime.now().setZone(ZONE);
-  const [hourlyResult, dailyResult, riverContextResult, dartDailyResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
+  const [hourlyResult, dailyResult, riverContextResult, weatherResult, sourceHealthResult, lakeForecastResult] = await Promise.allSettled([
     getHourlyObservations(),
     getDailyObservations(),
     getCwmsDailyRiverContext(),
-    getLatestDartGrandCouleeDaily(),
     getWeather(),
     verifyReclamationSources(),
     getLakeLevelForecast()
@@ -143,18 +143,13 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const hourly = hourlyResult.status === 'fulfilled' ? hourlyResult.value : [];
   const daily = dailyResult.status === 'fulfilled' ? dailyResult.value : [];
-  const cwmsRiverContext = riverContextResult.status === 'fulfilled' ? riverContextResult.value : { observedAt: null, inflowKcfs: null, dailyOutflowKcfs: null, precipitationIn: null };
-  const dartDaily = dartDailyResult.status === 'fulfilled' ? dartDailyResult.value : null;
-  const riverContext: GrandCouleeStatus['riverContext'] = {
-    ...cwmsRiverContext,
-    dailySpillDate: dartDaily?.date ?? null,
-    dailySpillKcfs: dartDaily?.spillKcfs ?? null,
-    dailySpillPercent: dartDaily?.spillPercent ?? null
-  };
+  const riverContext: GrandCouleeStatus['riverContext'] = riverContextResult.status === 'fulfilled'
+    ? riverContextResult.value
+    : { observedAt: null, inflowKcfs: null, dailyOutflowKcfs: null };
   const weather = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
   const reclamationHealthy = sourceHealthResult.status === 'fulfilled' ? sourceHealthResult.value : false;
   const rawLakeForecast = lakeForecastResult.status === 'fulfilled' ? lakeForecastResult.value : null;
-  const latest = hourly.length ? hourly[hourly.length - 1] : null;
+  const latest = [...hourly].reverse().find(row => row.totalOutflowKcfs !== null || row.forebayFt !== null) ?? (hourly.length ? hourly[hourly.length - 1] : null);
   const telemetry = telemetryStatus(latest);
   const latestDaily = daily.filter(row => Object.values(row).some(v => typeof v === 'number')).at(-1) ?? null;
   const latestReported = [...daily].reverse().find(row => row.averageGenerationMW !== null) ?? null;
@@ -172,8 +167,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
 
   const observedAt = latest?.observedAt ?? null;
   const currentFreshness = freshness(observedAt);
-  const riverContextFreshness = riverContextResult.status === 'fulfilled' ? freshness(cwmsRiverContext.observedAt) : 'unavailable';
-  const dartDailyFreshness = dartDailyResult.status === 'fulfilled' ? dailyFreshness(dartDaily?.date ?? null, now) : 'unavailable';
+  const riverContextFreshness = riverContextResult.status === 'fulfilled' ? dailyTimestampFreshness(riverContext.observedAt) : 'unavailable';
   const dailySourceFreshness = dailyResult.status === 'fulfilled' ? dailyFreshness(latestDaily?.date ?? null, now) : 'unavailable';
   const calibrationFreshness = dailyFreshness(calibration.latestDate, now);
   const lakeForecastFreshness = forecastFreshness(rawLakeForecast?.finalForecast?.date ?? null, now);
@@ -202,30 +196,18 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       retrievedAt,
       freshness: hourlyResult.status === 'fulfilled' ? currentFreshness : 'unavailable',
       note: telemetry.state === 'complete'
-        ? 'All five core operational series are publishing at the latest observation.'
-        : `Partial telemetry: ${telemetry.availableCoreSeries}/${telemetry.totalCoreSeries} core fields are numeric at the latest observation. Missing: ${telemetry.missingCoreSeries.join(', ') || 'none'}. Each field is handled independently and missing values are never replaced with zero.`
+        ? 'Current Lake Roosevelt elevation and Columbia River outflow are both publishing.'
+        : `Live visitor-facing telemetry is ${telemetry.availableCoreSeries}/${telemetry.totalCoreSeries}. Missing: ${telemetry.missingCoreSeries.join(', ') || 'none'}.`
     },
     {
       id: 'usace-daily-river',
       label: 'USACE CWMS Data API · Grand Coulee daily river context',
       url: USACE_HOURLY_URL,
       kind: 'reported',
-      observedAt: cwmsRiverContext.observedAt,
+      observedAt: riverContext.observedAt,
       retrievedAt,
       freshness: riverContextFreshness,
-      note: 'Latest daily-average inflow and outflow plus daily precipitation. These values provide basin context and never substitute for missing hourly spill, turbine-flow, tailwater, gate-count or plant-power telemetry.'
-    },
-    {
-      id: 'dart-daily-spill',
-      label: 'Columbia River DART · Grand Coulee daily river environment',
-      url: DART_DAILY_URL,
-      kind: 'reported',
-      observedAt: dartDaily?.date ?? null,
-      retrievedAt,
-      freshness: dartDailyFreshness,
-      note: dartDaily
-        ? 'DART daily spill is a 24-hour average in kcfs; spill percent is calculated from daily spill divided by daily outflow. It is context only and never drives the current spill animation or the hourly spill state.'
-        : 'DART daily spill query is currently unavailable or returned no usable Grand Coulee record. The app leaves daily spill blank rather than inferring it.'
+      note: 'Latest daily-average inflow and outflow. Daily observations use daily freshness rules rather than hourly telemetry thresholds.'
     },
     {
       id: 'usace-tailwater-curve',
@@ -235,7 +217,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       observedAt,
       retrievedAt,
       freshness: estimatedHeadFt !== null ? currentFreshness : 'unavailable',
-      note: 'Used only when measured tailwater is unavailable. Tailwater is linearly interpolated from Plate 7-5 using current total outflow. Validation against 367 historical daily observations produced 0.31 ft MAE and 0.85 ft 95th-percentile absolute error; USACE still cautions that Rufus Woods Lake backwater affects actual tailwater.'
+      note: 'Used in the engineering view when measured tailwater is unavailable. Tailwater is interpolated from the official rating curve using current total outflow.'
     },
     {
       id: 'reclamation-lake-forecast',
@@ -245,7 +227,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       observedAt: rawLakeForecast?.sourceObservedDate ?? null,
       retrievedAt,
       freshness: lakeForecastFreshness,
-      note: 'Official provisional/predicted midnight reservoir elevations. Forecast values are kept separate from the measured CWMS forebay observation and are never used as measured input.'
+      note: 'Official provisional/predicted midnight reservoir elevations, kept separate from the measured CWMS lake elevation.'
     },
     {
       id: 'usace-daily',
@@ -255,7 +237,7 @@ export async function getGrandCouleeStatus(): Promise<GrandCouleeStatus> {
       observedAt: latestDaily?.date ?? null,
       retrievedAt,
       freshness: dailySourceFreshness,
-      note: 'Reported daily generation and Banks Lake pumping data used for calibration and context. Freshness is based on the newest observation date, not HTTP retrieval success.'
+      note: 'Reported daily generation and Banks Lake pumping data used for engineering calibration and context.'
     },
     {
       id: 'reclamation-visitor',

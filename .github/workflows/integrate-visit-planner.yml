@@ -1,0 +1,35 @@
+name: Integrate Visit Planner
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/integrate-visit-planner.mjs
+      - .github/workflows/integrate-visit-planner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/integrate-visit-planner.mjs
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - name: Commit integration
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/GrandCouleeDashboard.tsx
+          git commit -m "Integrate smart visit planner into dashboard"
+          git push

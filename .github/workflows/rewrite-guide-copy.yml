@@ -1,0 +1,35 @@
+name: Rewrite Guide Copy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/rewrite-guide-copy.mjs
+      - .github/workflows/rewrite-guide-copy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/rewrite-guide-copy.mjs
+      - run: npm install --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - name: Commit guide copy
+        run: |
+          if git diff --quiet; then
+            echo "No copy changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/GrandCouleeDashboard.tsx components/VisitPlanner.tsx components/PhotographicDamExplorer.tsx components/InterpretiveDepth.tsx lib/status.ts
+          git commit -m "Give Grand Coulee a guide-led visitor voice"
+          git push

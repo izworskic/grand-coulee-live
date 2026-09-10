@@ -15,40 +15,42 @@ type Hotspot = {
   body: string;
 };
 
-const PHOTO_URL = '/api/dam-photo';
-const PHOTO_SOURCE = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.html';
+// Verified, public-domain Bureau of Reclamation aerial mirrored by Wikimedia Commons.
+// Keeping the browser on Wikimedia's image CDN removes the brittle USBR hot-link/proxy chain.
+const PHOTO_URL = 'https://upload.wikimedia.org/wikipedia/commons/a/ae/Grand_coulee_dam_aerial_2.jpg';
+const PHOTO_SOURCE = 'https://commons.wikimedia.org/wiki/File:Grand_coulee_dam_aerial_2.jpg';
 
 const HOTSPOTS: Hotspot[] = [
   {
-    id: 'reservoir', label: 'Lake Roosevelt', short: 'Lake Roosevelt', x: 17, y: 47,
+    id: 'reservoir', label: 'Lake Roosevelt', short: 'Lake Roosevelt', x: 51, y: 12,
     body: 'Lake Roosevelt sits behind the dam. Its level moves through the year as river operations, flood management and power needs change.'
   },
   {
-    id: 'spillway', label: 'Main spillway', short: 'Spillway', x: 48, y: 61,
+    id: 'spillway', label: 'Main spillway', short: 'Spillway', x: 51, y: 36,
     body: 'The broad center section is the spillway. Water passing here bypasses the turbines.'
   },
   {
-    id: 'left', label: 'Left Powerhouse', short: 'Left powerhouse', x: 35, y: 66,
+    id: 'left', label: 'Left Powerhouse', short: 'Left powerhouse', x: 27, y: 42,
     body: 'One of the original powerhouse blocks, with nine main generators and three smaller station-service units.'
   },
   {
-    id: 'right', label: 'Right Powerhouse', short: 'Right powerhouse', x: 58, y: 64,
+    id: 'right', label: 'Right Powerhouse', short: 'Right powerhouse', x: 76, y: 42,
     body: 'The other original powerhouse block, with nine main generators.'
   },
   {
-    id: 'third', label: 'Nathaniel “Nat” Washington Power Plant', short: 'Third Power Plant', x: 63, y: 50,
+    id: 'third', label: 'Nathaniel “Nat” Washington Power Plant', short: 'Third Power Plant', x: 14, y: 39,
     body: 'The Third Power Plant added six very large generating units and became the biggest single powerhouse in the complex.'
   },
   {
-    id: 'pumps', label: 'John W. Keys III Pump-Generating Plant', short: 'Pump plant', x: 57, y: 37,
+    id: 'pumps', label: 'John W. Keys III Pump-Generating Plant', short: 'Pump plant', x: 18, y: 30,
     body: 'Grand Coulee also moves water uphill. This plant lifts Columbia River water toward Banks Lake; six units can reverse and generate power.'
   },
   {
-    id: 'visitor', label: 'Grand Coulee Visitor Center', short: 'Visitor center', x: 65, y: 76,
+    id: 'visitor', label: 'Grand Coulee Visitor Center', short: 'Visitor center', x: 57, y: 65,
     body: 'The Visitor Center is below the dam. Start here for exhibits, tours and evening-show information.'
   },
   {
-    id: 'viewpoints', label: 'Public viewing area', short: 'Viewpoints', x: 73, y: 72,
+    id: 'viewpoints', label: 'Public viewing area', short: 'Viewpoints', x: 66, y: 69,
     body: 'Public viewing areas around the Visitor Center give you the clearest sense of the dam’s scale.'
   }
 ];
@@ -135,14 +137,14 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
       <div className="photo-dam-grid">
         <div className="dam-photo-card">
           <div className="dam-photo-stage">
-            <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River" loading="eager" decoding="async" />
+            <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River" loading="eager" decoding="async" referrerPolicy="no-referrer" />
             <div className="dam-photo-vignette" aria-hidden="true" />
 
             <svg className="dam-photo-flow" viewBox="0 0 1000 664" aria-hidden="true" preserveAspectRatio="none">
-              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M380 405 C395 470 420 500 470 538" />}
-              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M585 400 C575 455 570 500 540 540" />}
-              {spilling && <path className="photo-flow spill" d="M495 385 C500 450 505 500 515 540" />}
-              {status.pumping.banksLakePumpKcfs !== null && <path className="photo-flow pump" d="M575 355 C610 315 655 285 705 255" />}
+              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M265 282 C285 350 330 410 390 470" />}
+              {status.flow.generationFlowKcfs !== null && <path className="photo-flow generation" d="M755 280 C730 350 675 410 610 470" />}
+              {spilling && <path className="photo-flow spill" d="M510 230 C510 300 505 365 500 430" />}
+              {status.pumping.banksLakePumpKcfs !== null && <path className="photo-flow pump" d="M185 205 C150 175 120 145 95 112" />}
             </svg>
 
             {HOTSPOTS.map((point, index) => (
@@ -163,7 +165,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
             <div className="dam-photo-live-badge river"><span>OUTFLOW</span><strong>{status.flow.totalOutflowKcfs === null ? '—' : `${n(status.flow.totalOutflowKcfs, 1)} kcfs`}</strong></div>
           </div>
           <div className="dam-photo-caption">
-            <a href={PHOTO_SOURCE} target="_blank" rel="noreferrer">Bureau of Reclamation · June 30, 2011 ↗</a>
+            <a href={PHOTO_SOURCE} target="_blank" rel="noreferrer">Bureau of Reclamation aerial · public domain · Wikimedia Commons ↗</a>
           </div>
         </div>
 

@@ -15,7 +15,7 @@ type Hotspot = {
   body: string;
 };
 
-const PHOTO_URL = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.jpg';
+const PHOTO_URL = '/api/dam-photo';
 const PHOTO_SOURCE = 'https://www.usbr.gov/pn/grandcoulee/news/gallery/aerial/1.html';
 
 const HOTSPOTS: Hotspot[] = [
@@ -135,7 +135,7 @@ export function PhotographicDamExplorer({ status }: { status: GrandCouleeStatus 
       <div className="photo-dam-grid">
         <div className="dam-photo-card">
           <div className="dam-photo-stage">
-            <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River" loading="lazy" />
+            <img src={PHOTO_URL} alt="Aerial view of Grand Coulee Dam and the Columbia River" loading="eager" decoding="async" />
             <div className="dam-photo-vignette" aria-hidden="true" />
 
             <svg className="dam-photo-flow" viewBox="0 0 1000 664" aria-hidden="true" preserveAspectRatio="none">

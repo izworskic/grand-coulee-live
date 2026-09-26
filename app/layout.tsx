@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     type: 'website',
     url: '/national-tools/grand-coulee/'
   },
-  twitter: { card: 'summary_large_image', title: 'Grand Coulee Dam Live', description: 'Lake Roosevelt, river flow and a smarter way to time a Grand Coulee visit.' },
+  twitter: { card: 'summary', title: 'Grand Coulee Dam Live', description: 'Lake Roosevelt, river flow and a smarter way to time a Grand Coulee visit.' },
   other: { 'google-adsense-account': 'ca-pub-8222782620788075' }
 };
 

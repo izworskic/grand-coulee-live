@@ -13,11 +13,11 @@ export default async function HomePage() {
       {
         '@type': 'WebApplication',
         '@id': `${SITE_URL}#app`,
-        name: 'Grand Coulee Live',
+        name: 'Grand Coulee Dam Today',
         applicationCategory: 'TravelApplication',
         operatingSystem: 'Web',
         isAccessibleForFree: true,
-        description: 'Grand Coulee Dam operational and visitor intelligence with source-aware live conditions, Lake Roosevelt context, tours and laser-show timing.',
+        description: 'Grand Coulee Dam visitor planning for today with visitor center status, tour times, laser-show timing, weather and live Lake Roosevelt and river context.',
         url: SITE_URL,
         about: {
           '@type': 'TouristAttraction',
@@ -34,7 +34,7 @@ export default async function HomePage() {
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'ChrisIzworski.com', item: 'https://chrisizworski.com/' },
           { '@type': 'ListItem', position: 2, name: 'National Tools', item: 'https://chrisizworski.com/national-tools/' },
-          { '@type': 'ListItem', position: 3, name: 'Grand Coulee Live', item: SITE_URL }
+          { '@type': 'ListItem', position: 3, name: 'Grand Coulee Dam Today', item: SITE_URL }
         ]
       }
     ]

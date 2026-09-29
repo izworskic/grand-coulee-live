@@ -10,16 +10,16 @@ import './light-theme.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://chrisizworski.com'),
-  title: 'Grand Coulee Dam Live: Lake Roosevelt, River Flow, Tours & Visitor Planner',
-  description: "See Grand Coulee Dam conditions now: Lake Roosevelt elevation and change, Columbia River flow, daily inflow, tours, visitor hours, weather and a time-aware visit planner.",
+  title: 'Grand Coulee Dam Today | Tour Times, Laser Show & Visitor Conditions',
+  description: 'Plan a Grand Coulee Dam visit today with visitor center status, next tour, laser show time, weather, Lake Roosevelt context and a live visit planner.',
   alternates: { canonical: '/national-tools/grand-coulee/' },
   openGraph: {
-    title: 'Grand Coulee Dam Live',
-    description: 'Lake Roosevelt, river flow and a smarter way to time a Grand Coulee visit.',
+    title: 'Grand Coulee Dam Today | Tours, Laser Show & Visitor Conditions',
+    description: 'See what is open today, the next plant tour, laser show timing, weather and live Grand Coulee visitor conditions.',
     type: 'website',
     url: '/national-tools/grand-coulee/'
   },
-  twitter: { card: 'summary', title: 'Grand Coulee Dam Live', description: 'Lake Roosevelt, river flow and a smarter way to time a Grand Coulee visit.' },
+  twitter: { card: 'summary', title: 'Grand Coulee Dam Today', description: 'Tour times, laser show timing, weather and live visitor conditions.' },
   other: { 'google-adsense-account': 'ca-pub-8222782620788075' }
 };
 

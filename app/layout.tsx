@@ -10,11 +10,11 @@ import './light-theme.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://chrisizworski.com'),
-  title: 'Grand Coulee Dam Today | Tour Times, Laser Show & Visitor Conditions',
+  title: 'Grand Coulee Dam Today | Tours, Laser Show & Conditions',
   description: 'Plan a Grand Coulee Dam visit today with visitor center status, next tour, laser show time, weather, Lake Roosevelt context and a live visit planner.',
   alternates: { canonical: '/national-tools/grand-coulee/' },
   openGraph: {
-    title: 'Grand Coulee Dam Today | Tours, Laser Show & Visitor Conditions',
+    title: 'Grand Coulee Dam Today | Tours, Laser Show & Conditions',
     description: 'See what is open today, the next plant tour, laser show timing, weather and live Grand Coulee visitor conditions.',
     type: 'website',
     url: '/national-tools/grand-coulee/'
